@@ -122,7 +122,7 @@ const csvLahter = (v) => {
 // ---------- võtmise reegel (puhas funktsioon) ----------
 // Tagastab { lubatud, vaja_ule, juba, pohjus }. vaja_ule = seade on teise nimel; võtta saab ainult kinnitusega
 // „võtan üle“, mille järel eelmine kasutaja peab ülevõtu kinnitama enne, kui ta saab ise uusi seadmeid võtta.
-export function votmiseKontroll({ kasutaja, seade, laen, seaded, kinnitamata = 0, minuArv = 0, nyyd = Date.now() }) {
+export function votmiseKontroll({ kasutaja, seade, laen, seaded, kinnitamata = 0, minuArv = 0, nyyd = Date.now(), bron = [] }) {
   if (!seade) return { lubatud: false, pohjus: 'Tundmatu seade. Pöördu administraatori poole.' };
   if (kasutaja.olek === 'ootel') return { lubatud: false, pohjus: 'Sinu konto ootab administraatori kinnitust.' };
   if (kasutaja.olek !== 'aktiivne') return { lubatud: false, pohjus: 'Sinu konto on peatatud. Pöördu administraatori poole.' };
@@ -130,9 +130,14 @@ export function votmiseKontroll({ kasutaja, seade, laen, seaded, kinnitamata = 0
   if (kinnitamata > 0) return { lubatud: false, pohjus: 'Enne uue seadme võtmist vasta ülevõtu teatele (keegi võttis üle või tagastas seadme, mis oli sinu nimel).' };
   if (seade.olek === 'remondis') return { lubatud: false, pohjus: 'Seade on remondis/hoolduses. Pöördu administraatori poole.' };
   if (seade.olek === 'maha') return { lubatud: false, pohjus: 'Seade on maha kantud.' };
+  if (seade.olek === 'taatlusel') return { lubatud: false, pohjus: 'Seade on taatlusel/kalibreerimisel.' };
   if (seade.taatlus_kuni && seaded.taatlus_blokeerib && seade.taatlus_kuni < tana(nyyd))
     return { lubatud: false, pohjus: `Taatlus/kalibreerimine aegus ${seade.taatlus_kuni}. Pöördu administraatori poole.` };
   if (minuArv >= seaded.max_seadmeid) return { lubatud: false, pohjus: `Sinu nimel võib korraga olla kuni ${seaded.max_seadmeid} seadet.` };
+  // Broneering: täna teise inimese broneeritud seadet võtta ei saa (helista broneerijale, tema saab broneeringu tühistada)
+  const t = tana(nyyd);
+  const teise = bron.find((b) => b.kasutaja !== kasutaja.id && b.algus <= t && b.lopp >= t);
+  if (teise) return { lubatud: false, bron: teise, pohjus: `Seade on broneeritud: ${teise.nimi || '?'} ${teise.algus} – ${teise.lopp}${teise.tel ? ` (${teise.tel})` : ''}.` };
   if (laen) return { lubatud: true, vaja_ule: true, pohjus: 'Seade on teise kasutaja nimel.' };
   return { lubatud: true };
 }
@@ -162,6 +167,18 @@ export class Register {
     if (kirje.kood) await this.s.put(`ajalugu:${kirje.kood}:${inv(aeg)}:${r}`, k);
   }
   async kinnitamata(id) { return this.loend(`kinnita:${id}:`); }
+  // Seadme kehtivad broneeringud (lõpp ≥ täna), nimede ja telefonidega
+  async broneeringud(kood, nyyd = Date.now()) {
+    const t = tana(nyyd);
+    const l = [];
+    for (const [v, b] of await this.loend(`bron:${kood}:`)) {
+      if (b.lopp < t) continue;
+      const k = await this.elus(`kasutaja:${b.kasutaja}`);
+      if (!k) continue; // kustutatud kasutaja broneering ei kehti
+      l.push({ ...b, voti: v, nimi: k.nimi, tel: k.tel });
+    }
+    return l.sort((a, b) => (a.algus < b.algus ? -1 : 1));
+  }
   async minuLaenud(id) {
     return (await this.loend('laen:')).map(([, l]) => l).filter((l) => l.kasutaja === id);
   }
@@ -235,6 +252,8 @@ export class Register {
     const tee = url.pathname;
     try {
       if (tee.startsWith('/api/admin/')) return await this.admin(request, tee.slice(11), url);
+      const ics = /^\/api\/kalender\/([0-9A-Z]{32})\.ics$/.exec(tee);
+      if (ics && request.method === 'GET') return await this.kalender(ics[1]);
       if (request.method !== 'POST') return viga('meetod', 405);
       // CSRF: ainult JSON ja oma päis (teine sait ei saa neid ilma CORS-eelkontrollita saata)
       if (request.headers.get('X-QW') !== '1') return viga('päis puudub', 403);
@@ -264,6 +283,8 @@ export class Register {
         case '/api/kinnita': return await this.kinnita(k, keha);
         case '/api/otsi': return await this.otsi(k, keha);
         case '/api/laod': return await this.laod(k);
+        case '/api/broneeri': return await this.broneeri(k, keha);
+        case '/api/bron-tyhista': return await this.bronTyhista(k, keha);
       }
       return viga('tundmatu tee', 404);
     } catch (e) {
@@ -352,6 +373,9 @@ export class Register {
       else if (Date.parse(seade.taatlus_kuni) - Date.parse(t) <= seaded.taatlus_hoiatus_paevi * 86400000) hoiatused.push(`Taatlus/kalibreerimine aegub ${seade.taatlus_kuni}`);
     }
     for (const m of margmed) if (m.tyyp !== 'muu') hoiatused.push(`${MARKE_TYYBID[m.tyyp]} (${m.nimi}, ${eestiAeg(m.aeg)})`);
+    const bron = await this.broneeringud(seade.kood, nyyd);
+    const taatlusViimane = (await this.loend(`taatlus:${seade.kood}:`, 1)).map(([, x]) => x)[0] || null;
+    const taatlus = { kuni: seade.taatlus_kuni || null, intervall: seade.taatlus_intervall || null, tegija: taatlusViimane?.tegija || seade.taatlus_tegija || '', tunnistus: taatlusViimane?.tunnistus || '', viimati: taatlusViimane?.kuupaev || null };
     let kellel = null;
     if (laen) {
       const k = await this.s.get(`kasutaja:${laen.kasutaja}`);
@@ -363,14 +387,15 @@ export class Register {
     if (privaatne) {
       return { ajalugu: [], kood: seade.kood, nimi: seade.nimi, tyyp: seade.tyyp || '', invnr: seade.invnr || '', seerianr: seade.seerianr || '',
         taatlus_kuni: seade.taatlus_kuni || null, olek: seade.olek, lisainfo: seade.lisainfo || '', asukoht, kellel: laen ? { nimi: 'teine kasutaja', tel: '', alates: laen.alates, koht: '' } : null,
-        margmed: [], hoiatused: hoiatused.filter((h) => h.startsWith('Taatlus')) };
+        margmed: [], hoiatused: hoiatused.filter((h) => h.startsWith('Taatlus')), taatlus, bron: bron.map((b) => ({ algus: b.algus, lopp: b.lopp, nimi: 'broneeritud' })) };
     }
     const ajalugu = (await this.loend(`ajalugu:${seade.kood}:`, 100)).map(([, x]) => x).filter((x) => AJALUGU_TYYBID.has(x.tyyp)).slice(0, 15)
       .map((x) => ({ aeg: x.aeg, tyyp: x.tyyp, nimi: x.nimi, eelmise_nimi: x.eelmise_nimi || x.uus || '', marge: x.marge || '', foto: !!x.foto }));
     return {
       ajalugu,
       kood: seade.kood, nimi: seade.nimi, tyyp: seade.tyyp || '', invnr: seade.invnr || '', seerianr: seade.seerianr || '',
-      taatlus_kuni: seade.taatlus_kuni || null, olek: seade.olek, lisainfo: seade.lisainfo || '', asukoht, kellel, margmed, hoiatused,
+      taatlus_kuni: seade.taatlus_kuni || null, olek: seade.olek, lisainfo: seade.lisainfo || '', asukoht, kellel, margmed, hoiatused, taatlus,
+      bron: bron.map((b) => ({ id: b.id, algus: b.algus, lopp: b.lopp, nimi: b.nimi, tel: b.tel, kasutaja: b.kasutaja, markus: b.markus || '' })),
     };
   }
 
@@ -380,10 +405,21 @@ export class Register {
     const seadmed = [];
     for (const l of laenud.sort((a, b) => a.alates - b.alates)) {
       const s = await this.elus(`seade:${l.kood}`);
-      seadmed.push({ kood: l.kood, nimi: s?.nimi || '?', invnr: s?.invnr || '', alates: l.alates });
+      // Kui keegi teine on selle seadme lähiajaks (≤ 3 päeva) broneerinud, näeb hoidja hoiatust
+      const t3 = tana(Date.now() + 3 * 86400000);
+      const b = (await this.broneeringud(l.kood)).find((x) => x.kasutaja !== k.id && x.algus <= t3);
+      seadmed.push({ kood: l.kood, nimi: s?.nimi || '?', invnr: s?.invnr || '', alates: l.alates, bron: b ? { nimi: b.nimi, tel: b.tel, algus: b.algus, lopp: b.lopp } : null });
     }
+    const t0 = tana(Date.now());
+    const minuBron = [];
+    for (const [v, b] of await this.loend('bron:')) {
+      if (b.kasutaja !== k.id || b.lopp < t0) continue;
+      const s = await this.elus(`seade:${b.kood}`);
+      if (s) minuBron.push({ id: b.id, kood: b.kood, nimi: s.nimi, invnr: s.invnr || '', algus: b.algus, lopp: b.lopp });
+    }
+    minuBron.sort((a, b) => (a.algus < b.algus ? -1 : 1));
     const kinnitamata = (await this.kinnitamata(k.id)).map(([v, x]) => ({ ...x, id: v.split(':').slice(2).join(':') }));
-    return { kasutaja: { id: k.id, nimi: k.nimi, tel: k.tel, olek: k.olek, super: !!k.super }, seadmed, kinnitamata, max_seadmeid: seaded.max_seadmeid, firma: seaded.firma, foto: this.fotoReziim(seaded) };
+    return { kasutaja: { id: k.id, nimi: k.nimi, tel: k.tel, olek: k.olek, super: !!k.super }, seadmed, kinnitamata, broneeringud: minuBron, max_seadmeid: seaded.max_seadmeid, firma: seaded.firma, foto: this.fotoReziim(seaded) };
   }
 
   async seadmeInfo(k, { kood }) {
@@ -392,7 +428,7 @@ export class Register {
     if (!seade) return viga('Tundmatu QR-kood. Pöördu administraatori poole.', 404, { tundmatu: true });
     const laen = await this.s.get(`laen:${kk}`);
     const seaded = await this.seaded();
-    const kontroll = votmiseKontroll({ kasutaja: k, seade, laen, seaded, kinnitamata: (await this.kinnitamata(k.id)).length, minuArv: (await this.minuLaenud(k.id)).length });
+    const kontroll = votmiseKontroll({ kasutaja: k, seade, laen, seaded, kinnitamata: (await this.kinnitamata(k.id)).length, minuArv: (await this.minuLaenud(k.id)).length, bron: await this.broneeringud(kk) });
     return json({ ok: true, seade: await this.seadmeKaart(seade, laen, seaded, Date.now(), k.olek !== 'aktiivne'), minu: !!laen && laen.kasutaja === k.id, vota: kontroll, marke_tyybid: MARKE_TYYBID });
   }
 
@@ -414,7 +450,7 @@ export class Register {
     for (const kood of list) {
       const seade = await this.elus(`seade:${kood}`);
       const laen = await this.s.get(`laen:${kood}`);
-      const r = votmiseKontroll({ kasutaja: k, seade, laen, seaded, kinnitamata, minuArv, nyyd });
+      const r = votmiseKontroll({ kasutaja: k, seade, laen, seaded, kinnitamata, minuArv, nyyd, bron: seade ? await this.broneeringud(kood, nyyd) : [] });
       if (!r.lubatud) { tulemused.push({ kood, nimi: seade?.nimi, ok: false, juba: !!r.juba, viga: r.pohjus }); continue; }
       if (r.vaja_ule) {
         const eelmine = await this.s.get(`kasutaja:${laen.kasutaja}`);
@@ -539,6 +575,70 @@ export class Register {
     return json({ ok: true, tulemused: tul });
   }
 
+  // ---------- kalender (Outlook / Google tellib lingi): taatluse tähtajad ja broneeringud ----------
+  async kalender(token) {
+    const seaded = await this.seaded();
+    if (!seaded.kalender_token || !vordle(token, seaded.kalender_token)) return new Response('Ei leitud', { status: 404 });
+    const e = (v) => String(v || '').replace(/\\/g, '\\\\').replace(/[,;]/g, (m) => '\\' + m).replace(/\r?\n/g, '\\n');
+    const pv = (d) => d.replace(/-/g, '');
+    const jargmine = (d) => new Date(Date.parse(d) + 86400000).toISOString().slice(0, 10).replace(/-/g, '');
+    const tl = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Kratt//kratt.kindavel.ee//ET', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH', `X-WR-CALNAME:${e(seaded.firma)} – Kratt`, 'X-WR-TIMEZONE:Europe/Tallinn'];
+    const stamp = new Date().toISOString().replace(/[-:]/g, '').slice(0, 15) + 'Z';
+    for (const [, s] of await this.elusLoend('seade:')) {
+      if (s.olek === 'maha' || !s.taatlus_kuni) continue;
+      tl.push('BEGIN:VEVENT', `UID:taatlus-${s.kood}-${pv(s.taatlus_kuni)}@kratt`, `DTSTAMP:${stamp}`, `DTSTART;VALUE=DATE:${pv(s.taatlus_kuni)}`, `DTEND;VALUE=DATE:${jargmine(s.taatlus_kuni)}`,
+        `SUMMARY:${e(`Taatlus: ${s.nimi}${s.invnr ? ` (${s.invnr})` : ''}`)}`, `DESCRIPTION:${e(`Taatlus/kalibreerimine kehtib kuni ${s.taatlus_kuni}.`)}`,
+        'BEGIN:VALARM', 'ACTION:DISPLAY', `DESCRIPTION:${e(`Taatlus aegub: ${s.nimi}`)}`, `TRIGGER:-P${seaded.taatlus_hoiatus_paevi || 30}D`, 'END:VALARM', 'END:VEVENT');
+    }
+    const t = tana(Date.now());
+    for (const [, b] of await this.loend('bron:')) {
+      if (b.lopp < t) continue;
+      const s = await this.elus(`seade:${b.kood}`); if (!s) continue;
+      const k = await this.s.get(`kasutaja:${b.kasutaja}`);
+      tl.push('BEGIN:VEVENT', `UID:bron-${b.id}@kratt`, `DTSTAMP:${stamp}`, `DTSTART;VALUE=DATE:${pv(b.algus)}`, `DTEND;VALUE=DATE:${jargmine(b.lopp)}`,
+        `SUMMARY:${e(`Broneering: ${s.nimi} – ${k?.nimi || '?'}`)}`, `DESCRIPTION:${e(b.markus || '')}`, 'TRANSP:TRANSPARENT', 'END:VEVENT');
+    }
+    tl.push('END:VCALENDAR');
+    return new Response(tl.map((r) => (r.length > 60 ? r.match(/.{1,60}/gu).join('\r\n ') : r)).join('\r\n') + '\r\n', { headers: { 'Content-Type': 'text/calendar; charset=utf-8', 'Cache-Control': 'no-store' } });
+  }
+
+  // ---------- broneerimine ----------
+  // Kuupäevad AAAA-KK-PP (kaasa arvatud). Algus täna…+180 p, kestus ≤ 60 p, ei kattu teiste broneeringutega.
+  async broneeri(k, { kood, algus, lopp, markus }) {
+    const kk = normKood(kood);
+    const seade = kk ? await this.elus(`seade:${kk}`) : null;
+    if (!seade) return viga('Tundmatu seade.', 404);
+    if (seade.olek === 'maha') return viga('Seade on maha kantud.');
+    const a = kuupaev(algus), l = kuupaev(lopp);
+    if (!a || !l) return viga('Vali algus- ja lõppkuupäev.');
+    const t = tana(Date.now());
+    if (a < t) return viga('Algus ei saa olla minevikus.');
+    if (l < a) return viga('Lõpp peab olema alguse järel.');
+    if ((Date.parse(l) - Date.parse(a)) / 86400000 > 60) return viga('Broneering võib olla kuni 60 päeva.');
+    if ((Date.parse(a) - Date.parse(t)) / 86400000 > 180) return viga('Broneerida saab kuni 180 päeva ette.');
+    const olemas = await this.broneeringud(kk);
+    const kattub = olemas.find((b) => b.algus <= l && b.lopp >= a);
+    if (kattub) return viga(`Kattub broneeringuga: ${kattub.nimi} ${kattub.algus} – ${kattub.lopp}.`, 409);
+    const minu = (await this.loend('bron:')).filter(([, b]) => b.kasutaja === k.id && b.lopp >= t).length;
+    if (minu >= 20) return viga('Sul on juba 20 kehtivat broneeringut.');
+    const id = juhuslik(8);
+    const b = { id, kood: kk, kasutaja: k.id, algus: a, lopp: l, markus: puhasta(markus, 200), loodud: Date.now() };
+    await this.s.put(`bron:${kk}:${a}:${id}`, b);
+    await this.logi({ tyyp: 'broneering', kood: kk, kasutaja: k.id, nimi: k.nimi, tekst: `${a} – ${l}${b.markus ? ` (${b.markus})` : ''}` });
+    return json({ ok: true, broneering: b, mina: await this.mina(k) });
+  }
+  async bronTyhista(k, { kood, id }, haldur = false) {
+    const kk = normKood(kood);
+    if (!kk || typeof id !== 'string' || !/^[0-9A-Z]{8}$/.test(id)) return viga('vigane broneering');
+    const leitud = (await this.loend(`bron:${kk}:`)).find(([, b]) => b.id === id);
+    if (!leitud) return viga('Broneeringut ei leitud.', 404);
+    const [v, b] = leitud;
+    if (!haldur && b.kasutaja !== k.id && !k.super) return viga('Saad tühistada ainult oma broneeringu.', 403);
+    await this.s.delete(v);
+    await this.logi({ tyyp: 'broneering_tyhistatud', kood: kk, kasutaja: haldur ? b.kasutaja : k.id, nimi: haldur ? 'haldur' : k.nimi, tekst: `${b.algus} – ${b.lopp}` });
+    return haldur ? json({ ok: true }) : json({ ok: true, mina: await this.mina(k) });
+  }
+
   // Ladude seis (ainult superkasutaja): igas laos vabad seadmed, sealt välja võetud seadmed ja remondis olevad
   async laod(k) {
     if (!k.super) return viga('Ainult superkasutajale.', 403);
@@ -555,7 +655,7 @@ export class Register {
       const g = seis.get(kohtK) || maaramata;
       const rida = { kood: s.kood, nimi: s.nimi, invnr: s.invnr || '', tyyp: s.tyyp || '' };
       if (l) { const kk = kasutajad.get(l.kasutaja); g.valjas.push({ ...rida, kellel: kk?.nimi || '?', tel: kk?.tel || '', alates: l.alates }); }
-      else if (s.olek === 'remondis') g.remondis.push(rida);
+      else if (s.olek === 'remondis' || s.olek === 'taatlusel') g.remondis.push({ ...rida, olek: s.olek });
       else g.vabad.push(rida);
     }
     const laod = kohad.map((x) => ({ kood: x.kood, nimi: x.nimi, lyhend: x.lyhend || '', ...seis.get(x.kood) }));
@@ -607,6 +707,7 @@ export class Register {
       if (tee === 'logi') return json({ ok: true, logi: await this.logiLoe(url.searchParams.get('kood'), 300) });
       if (tee === 'seadmed.csv') return this.seadmedCsv();
       if (tee === 'logi.csv') return this.logiCsv();
+      if (tee === 'taatlused') { const kk = normKood(url.searchParams.get('kood') || ''); return json({ ok: true, taatlused: kk ? (await this.loend(`taatlus:${kk}:`, 50)).map(([, x]) => x) : [] }); }
       if (tee === 'foto') {
         const v = url.searchParams.get('k') || '';
         if (!FOTO_RE.test(v) || !this.env.FOTOD) return viga('ei leitud', 404);
@@ -631,6 +732,9 @@ export class Register {
       case 'seaded': return this.adminSeaded(b);
       case 'kustuta': return this.adminKustuta(b);
       case 'taasta': return this.adminTaasta(b);
+      case 'taatlus': return this.adminTaatlus(b);
+      case 'bron-tyhista': return this.bronTyhista(null, b, true);
+      case 'kalender': return this.adminKalender(b);
     }
     return viga('tundmatu', 404);
   }
@@ -658,7 +762,12 @@ export class Register {
     const margmed = [];
     for (const [v, m] of await this.loend('marge:')) if (!m.lahendatud) margmed.push({ ...m, voti: v, kood: v.split(':')[1] });
     const kas = [...kasutajad.values()].map(({ rasi, lahtestus, ...k }) => ({ ...k, seadmeid: [...laenud.values()].filter((l) => l.kasutaja === k.id).length, kinnitamata: kinnitused.filter((x) => x.kasutaja_id === k.id).length }));
-    return { ok: true, seaded, foto_olemas: !!this.env.FOTOD, kohad, seadmed, kasutajad: kas, kinnitused, vaidlused, margmed };
+    const t = tana(Date.now());
+    const broneeringud = [];
+    for (const [, b] of await this.loend('bron:')) if (b.lopp >= t) broneeringud.push({ ...b, nimi: kasutajad.get(b.kasutaja)?.nimi || '?', tel: kasutajad.get(b.kasutaja)?.tel || '', seade: seadmed.find((x) => x.kood === b.kood)?.nimi || '?' });
+    broneeringud.sort((a, b) => (a.algus < b.algus ? -1 : 1));
+    const viimane = (await this.loend('logi:', 1)).map(([, x]) => x.aeg)[0] || 0;
+    return { ok: true, seaded, foto_olemas: !!this.env.FOTOD, kohad, seadmed, kasutajad: kas, kinnitused, vaidlused, margmed, broneeringud, logi_viimane: viimane };
   }
 
   async adminSeade(b) {
@@ -672,7 +781,9 @@ export class Register {
     if (uus && b.uus_kood && !kood) return viga('Vigane kood (12 märki, 0-9 A-Z ilma I L O U).');
     const nimi = puhasta(b.nimi, 80);
     if (nimi.length < 2) return viga('Sisesta seadme nimi.');
-    const olek = ['aktiivne', 'remondis', 'maha'].includes(b.olek) ? b.olek : 'aktiivne';
+    const olek = ['aktiivne', 'remondis', 'taatlusel', 'maha'].includes(b.olek) ? b.olek : 'aktiivne';
+    const intervall = b.taatlus_intervall === '' || b.taatlus_intervall == null ? null : Number(b.taatlus_intervall);
+    if (intervall !== null && (!Number.isInteger(intervall) || intervall < 1 || intervall > 120)) return viga('Taatluse intervall 1–120 kuud.');
     const taatlus = b.taatlus_kuni ? kuupaev(b.taatlus_kuni) : null;
     if (b.taatlus_kuni && !taatlus) return viga('Vigane taatluse kuupäev (AAAA-KK-PP).');
     const koduladu = normKood(b.asukoht || '');
@@ -697,12 +808,42 @@ export class Register {
     if (uus && !k) do k = juhuslik(12); while (await this.s.get(`seade:${k}`) || await this.s.get(`koht:${k}`));
     const kirje = {
       ...(s || { loodud: Date.now() }), kood: k, nimi, tyyp: puhasta(b.tyyp, 60), invnr, seerianr: puhasta(b.seerianr, 60),
-      taatlus_kuni: taatlus, olek, lisainfo: puhastaMitmerealine(b.lisainfo, 500), koduladu: ladu ? koduladu : null, muudetud: Date.now(),
+      taatlus_kuni: taatlus, taatlus_intervall: intervall, olek, lisainfo: puhastaMitmerealine(b.lisainfo, 500), koduladu: ladu ? koduladu : null, muudetud: Date.now(),
     };
     if (uus) kirje.reg_ladu = ladu ? koduladu : null;
     await this.s.put(`seade:${k}`, kirje);
     await this.logi({ tyyp: uus ? 'seade_lisatud' : 'seade_muudetud', kood: k, nimi: 'haldur', seade: nimi });
     return json({ ok: true, seade: kirje });
+  }
+
+  // ---------- taatlus / kalibreerimine ----------
+  // Registreeri tehtud taatlus: kuupäev, tunnistus, tegija, tulemus. Järgmine tähtaeg = sisestatud või kuupäev + intervall (kuud).
+  async adminTaatlus({ kood, kuupaev: kp, tunnistus, tegija, tulemus, jargmine, markus }) {
+    const kk = normKood(kood);
+    const s = kk ? await this.s.get(`seade:${kk}`) : null;
+    if (!s) return viga('Seadet ei leitud', 404);
+    const d = kuupaev(kp);
+    if (!d) return viga('Sisesta taatluse kuupäev.');
+    if (!['sobib', 'ei_sobi'].includes(tulemus)) return viga('Vali tulemus.');
+    let j = jargmine ? kuupaev(jargmine) : null;
+    if (jargmine && !j) return viga('Vigane järgmise taatluse kuupäev.');
+    if (!j && s.taatlus_intervall) {
+      const x = new Date(d + 'T12:00:00Z'); x.setUTCMonth(x.getUTCMonth() + s.taatlus_intervall); j = x.toISOString().slice(0, 10);
+    }
+    const kirje = { kood: kk, kuupaev: d, tunnistus: puhasta(tunnistus, 80), tegija: puhasta(tegija, 80) || s.taatlus_tegija || '', tulemus, jargmine: j, markus: puhastaMitmerealine(markus, 300), aeg: Date.now() };
+    await this.s.put(`taatlus:${kk}:${String(TS_MAX - Date.parse(d)).padStart(13, '0')}:${juhuslik(4)}`, kirje);
+    if (tulemus === 'sobib') { if (j) s.taatlus_kuni = j; if (s.olek === 'taatlusel') s.olek = 'aktiivne'; }
+    else s.olek = 'remondis';
+    if (kirje.tegija) s.taatlus_tegija = kirje.tegija;
+    await this.s.put(`seade:${kk}`, s);
+    for (const [v, m] of await this.loend(`marge:${kk}:`)) if (m.tyyp === 'taatlus' && !m.lahendatud) await this.s.put(v, { ...m, lahendatud: true, lahendatud_aeg: Date.now(), otsus: `taatlus ${d}` });
+    await this.logi({ tyyp: 'taatlus_tehtud', kood: kk, nimi: 'haldur', tekst: `${d}, ${tulemus === 'sobib' ? 'sobib' : 'EI SOBI'}${kirje.tunnistus ? `, tunnistus ${kirje.tunnistus}` : ''}${j ? `, järgmine ${j}` : ''}` });
+    return json({ ok: true, seade: s, taatlus: kirje });
+  }
+  async adminKalender({ uus }) {
+    const s = await this.seaded();
+    if (uus || !s.kalender_token) { s.kalender_token = juhuslik(32); await this.s.put('seaded', s); }
+    return json({ ok: true, token: s.kalender_token });
   }
 
   // ---------- kustutamine (taastatav 30 päeva) ----------
@@ -756,10 +897,11 @@ export class Register {
         if (!x.kustutatud) continue;
         if (nyyd - x.kustutatud < KUSTUTUS_MS) { const t = x.kustutatud + KUSTUTUS_MS; if (!jargmine || t < jargmine) jargmine = t; continue; }
         await this.s.delete(v);
-        if (liik === 'seade') for (const p of [`marge:${x.kood}:`, `ajalugu:${x.kood}:`]) for (const [k2] of await this.loend(p)) await this.s.delete(k2);
+        if (liik === 'seade') for (const p of [`marge:${x.kood}:`, `ajalugu:${x.kood}:`, `bron:${x.kood}:`, `taatlus:${x.kood}:`]) for (const [k2] of await this.loend(p)) await this.s.delete(k2);
         if (liik === 'kasutaja') {
           if (x.tel && (await this.s.get(`tel:${x.tel}`)) === x.id) await this.s.delete(`tel:${x.tel}`);
           for (const [k2] of await this.kinnitamata(x.id)) await this.s.delete(k2);
+          for (const [k2, b] of await this.loend('bron:')) if (b.kasutaja === x.id) await this.s.delete(k2);
         }
         await this.logi({ tyyp: 'lopp_kustutatud', liik, objekt: v.slice(prefix.length), nimi: 'süsteem', tekst: x.nimi });
       }
