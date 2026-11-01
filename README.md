@@ -1,0 +1,77 @@
+# QR-töökoht (qrwork)
+
+Tööriistade ja mõõteseadmete register töökohale: **leia mind**, **seadmete register** ja **võtmine/tagastamine** QR-koodiga.
+Cloudflare Worker + üks Durable Object (SQLite), sõltuvusi pole. Lähtekoht on leiamind'i ülesehitus (QR-generaator, teavitused, turvapõhimõtted).
+
+## Kuidas see töötab
+
+| QR | Kus | Mida teeb |
+|---|---|---|
+| **Töökoha QR** `/K/<kood>` | laos / objektil (A4 plakat) | avab registri. Esimesel korral registreerub kasutaja (nimi, telefon, enda valitud parool), edaspidi on ta telefonis sisse logitud (küpsis 180 päeva). Nimi ja telefon on brauseris eeltäidetud. |
+| **Seadme QR** `/S/<kood>` | seadmel (kleebis) | sisse logitud töötaja skännib seda rakenduse skänneriga (nupud **Võta seade** / **Tagasta seade**) või telefoni kaameraga (avab seadme kaardi). Võõras inimene näeb leidja lehte („leia mind“). |
+
+- **Muu QR** rakenduse skanneris → „Tundmatu QR-kood. Pöördu administraatori poole.“ Sama teade tuleb, kui kood on õiges vormis, aga seadet registris pole.
+- **Kasutaja ei muuda registriandmeid** (nimi, inventari- ja seerianumber, taatlus, olek). Ta saab lisada ainult **märkuse**: *Ei tööta*, *Vajab taatlemist/kalibreerimist*, *Kahjustatud*, *Tarvik puudu*, *Muu* (+ valikuline foto). Kõik märkused on halduse ülevaates; *Ei tööta*, *Vajab taatlemist* ja *Kahjustatud* saadetakse haldurile ka teavitusena (Telegram/ntfy). Teised kasutajad näevad lahendamata märkust (v.a *Muu*) hoiatusena enne võtmist.
+- **Kuupäevad:** iga sündmus (võtmine, tagastus, ülevõtt, tagastus teise eest, märkus, kinnitus, vaidlus) salvestatakse kuupäeva ja kellaajaga ning töökohaga. Seadme kaardil on ajalugu (15 viimast), halduses kogu logi ja CSV.
+
+## Võtmise ja tagastamise reeglid (lahendus)
+
+1. **Võta seade:** seade seotakse võtjaga (nimi, telefon, aeg, töökoht). Tagastada saab ainult see sama isik.
+2. **Mitu seadet korraga:** skanner jääb lahti, skänni järjest mitu seadet ja kinnita korraga („Võta (3)“). Igal seadmel on oma tulemus: ühe seadme keeld ei takista teisi.
+3. **Juurde võtmine töö käigus:** kasutaja nimel võib korraga olla mitu seadet (vaikimisi kuni 20, seadetes muudetav). Uue võtmine ei mõjuta juba võetud seadmeid; eelmist ei pea enne tagastama.
+4. **Unustatud tagastus (ülevõtt):** kui B skännib seadme, mis on veel A nimel, näeb B: „Seade on registreeritud: A (telefon) alates …“. B saab seadme võtta ainult linnukesega **„Võtan seadme üle“**. Siis:
+   - A kasutus lõpeb (logis „võttis üle“), seade on B nimel;
+   - A saab avalehel teate „<seade> oli sinu nimel … B võttis selle üle …“ ja **ei saa uusi seadmeid võtta**, kuni ta vastab;
+   - A vastab **„Jah, tagastasin / andsin üle“** → keeld kaob, A „hilinenud tagastuste“ arv suureneb (näha halduses);
+   - või **„Ei, vaidlustan“** + põhjendus → keeld kaob kohe (Margo otsus 01.11.2026, et töö ei seiskuks), vaidlus läheb haldurile (teavitus + ülevaade).
+   - Keeld puudutab ainult **uute** seadmete võtmist: A saab oma teisi seadmeid tagastada ja märkusi lisada.
+5. **Seadme otse üleandmine kolleegile** käib sama mehhanismiga (B võtab üle, A kinnitab „andsin üle“). Eraldi „anna üle“ nuppu pole vaja.
+6. **Tagastus teise eest:** kui seade on laos tagasi, aga A unustas registreerida, saab teine kasutaja selle skännida tagastuses ja märkida **„tagastatuks A eest“**. A saab sama kinnitamise kohustuse kui ülevõtul. Haldur võib tagastuse registreerida ka ise (ilma keeluta).
+7. **Võtta ei saa**, kui seade on *remondis* või *maha kantud*, kui taatlus/kalibreerimine on aegunud (seadetes välja lülitatav), kui kasutaja konto ootab kinnitust või on peatatud, või kui kasutaja limiit on täis. Põhjus on skanneris iga seadme juures näha.
+8. **Samaaegsus:** kõik muudatused käivad läbi ühe Durable Objecti, seega kaks inimest ei saa sama seadet korraga „vabana“ võtta.
+9. **Kus seade on? (sisemine leia mind):** otsing nime, tüübi või inventarinumbri järgi näitab, kelle käes seade on (nimi, telefon, alates) või millises laos see viimati tagastati.
+10. **Leidja (väline leia mind):** sisse logimata inimene näeb seadme QR-ist firma nime ja seadme nime, saab saata sõnumi, kontakti ja (loaga) GPS-asukoha. Haldur saab teate koos selle inimesega, kelle nimel seade on.
+
+## Foto (valikuline)
+Foto võtmisel, tagastamisel ja märkusega (nt kahjustuse tõendamiseks vaidluses). Vajab R2 sidet `FOTOD` (`wrangler.toml`, plokk on kommenteeritud). Seadetes: `ei` / `valikuline` / `kohustuslik`. Telefon vähendab foto (≤ 1600 px JPEG, EXIF ja GPS kaovad); server kontrollib tüüpi ja suurust (≤ 1,5 MB). Fotot näeb ainult haldur (logi ja märkused, „📷 foto“). Säilitusaeg: sea R2 bucket'ile elutsükli reegel (nt 365 päeva) Cloudflare'i juhtpaneelis.
+
+## Haldus `/admin` (ADMIN_TOKEN)
+- **Ülevaade:** vaidlused, kinnitust ootavad kasutajad, kinnitamata ülevõtud (keelu eemaldamine), märkused (lahendamine), taatlus aegub/aegunud, kasutuses seadmed (päevade arv, üle `hoiata_paevi` punasena, „Tagasta (haldur)“).
+- **Seadmed:** lisa/muuda (nimi, tüüp, inventari- ja seerianumber, taatlus kuni, olek, koduladu, lisainfo, valikuliselt olemasolev 12-märgine kood), ajalugu, **sildid printimiseks** (32 × 44 mm, QR 28 mm + nimi + inventarinr + kood), CSV.
+- **Töökohad:** lisa/muuda, **A4 plakat** töökoha QR-iga ja juhisega; registreerimine *vaba* või *administraatori kinnitusega* (töökoha või üldise seade kaupa). **Vaikimisi administraatori kinnitusega** (Margo otsus 01.11.2026): uus kasutaja saab sisse logida, aga seadmeid võtta alles pärast kinnitamist (halduse ülevaade „Ootavad kinnitust“, teavitus Telegrami/ntfy-sse).
+- **Kasutajad:** aktiveeri/peata, **taastuskood** parooli unustamisel (8 märki, 24 h; kasutaja sisestab selle „Unustasid parooli?“ all), keelu eemaldamine, hilinenud tagastuste arv.
+- **Logi** (300 viimast, CSV kuni 5000) ja **Seaded** (firma nimi, leidja kontakttelefon, limiit, registreerimine, hoiatuste päevad, taatluse keeld, foto).
+
+## Paigaldus
+```
+npx wrangler login
+npx wrangler secret put ADMIN_TOKEN       # openssl rand -base64 32
+npx wrangler secret put TOKEN_SECRET      # openssl rand -base64 32
+# valikuline: TG_BOT_TOKEN, TG_CHAT_ID, NTFY_TOPIC, NTFY_TOKEN; fotode jaoks R2 (vt wrangler.toml)
+npm run deploy
+```
+Siis `/admin` → Seaded (firma nimi) → Töökohad (lisa, prindi plakat) → Seadmed (lisa, prindi sildid).
+**Domeen: `qrwork.kindavel.ee`** (Margo otsus 01.11.2026; `wrangler.toml` `routes`). QR sisaldab aadressi püsivalt (`HTTPS://<DOMEEN>/S/<KOOD>`, suurtähtedega, alfanumeeriline režiim, veaparandus Q).
+
+## Turvalisus ja privaatsus
+- Parool: PBKDF2-SHA256 (vaikimisi 100 000 iteratsiooni, 16-baidine sool). Sessioon: juhuslik 40-märgine token, serveris ainult SHA-256 räsi, küpsis `HttpOnly; Secure; SameSite=Lax`. API nõuab päist `X-QW: 1` (CSRF).
+- Vigaste sisselogimiste piir: 8 telefoni ja 30 IP kohta 15 minutis; haldus 10 viga; registreerimine 10 tunnis IP kohta. Loendurid on DO mälus (kaovad DO taaskäivitusel, rünnaku ajal DO töötab).
+- IP-d ei salvestata (piirangu võti on soolatud räsi). CSP nonce'iga, välist koodi ei laeta, `X-Frame-Options: DENY`, kaamera ja asukoht ainult oma lehel.
+- **Isikuandmed:** kasutaja nimi ja telefon on nähtavad kolleegidele (kelle käes seade on) ja haldurile; see on registreerimisel öeldud. Logi säilib DO-s piiramata ajaga; kui vaja, lisa säilitustähtaeg (ettepanek allpool).
+- **Parool ja CPU [KONTROLLIMATA]:** tasuta plaani CPU-piir päringu kohta võib PBKDF2 100 000 iteratsiooniga ületada (viga 1102 sisselogimisel). Siis sea `PBKDF2_ITER` väiksemaks (nt 30000); vanad paroolid töötavad edasi (iteratsioonide arv on räsis).
+- Durable Objectide SQLite tasuta plaanil ja `new_sqlite_classes` süntaks on mälu järgi [KONTROLLIMATA]; kontrolli <https://developers.cloudflare.com/durable-objects/> enne esimest deploy'd.
+
+## QR-lugeja
+Brauseri `BarcodeDetector` (Android Chrome), selle puudumisel `/jsqr.js` (jsQR 1.4.0, Apache-2.0, iPhone Safari jt). Kaamera nõuab HTTPS-i. Kui kaamera luba puudub, saab koodi sisestada käsitsi (sildil). Kontrollitud: Chromium võltskaameraga (jsQR-tee) loeb seadme QR-i, võõras domeen / suvaline tekst annab „Tundmatu QR-kood“, töökoha QR annab juhise. Päris telefonidega (iPhone, Android) ei ole veel proovitud.
+
+## Testid
+```
+npm test
+```
+Node 22 sisseehitatud testijooksja: registreerimine ja sisselogimine, mitu seadet ja juurde võtmine, ülevõtt ja keeld, vaidlus, tagastus teise eest, remont/taatlus/limiit, märkused, foto (R2 asendus), lehed ja CSP.
+
+## Edasiarendus (ettepanekud)
+- Kasutaja teavitus ülevõtust (SMS või ntfy kasutaja kaupa); praegu näeb ta seda järgmisel avamisel.
+- Logi säilitustähtaeg ja isikuandmete kustutamine lahkunud töötajal.
+- Broneerimine (seade homseks objektile) ja tagastustähtaeg seadme kaupa.
+- Seadme komplekt (nt tahhümeeter + statiiv + latt) ühe QR-iga.
