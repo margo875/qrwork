@@ -38,6 +38,12 @@ Cloudflare Worker + üks Durable Object (SQLite), sõltuvusi pole. Lähtekoht on
 - **Superkasutaja** (haldus → Kasutajad → linnuke „Superkasutaja“) näeb tühja otsinguga kõiki seadmeid ja vaadet **🏬 Laod ja seis**: igas laos vabad, väljas (kellel, alates) ja remondis olevad seadmed.
 - **Kataloog** (haldus → Seadmed → 📖 Kataloog): A4 nimekiri, kus igal seadmel on **eraldi kataloogi QR** (`/I/<kood>`). See avab otsingus („Kus on seade?“ → 📷 QR) seadme kaardi ainult vaatamiseks. Võtmise/tagastamise skanner keeldub sellest („See on kataloogi QR-kood…“), et laos olevast kataloogist ei saaks seadet võtta ilma seadmeta.
 
+## Kustutamine (Margo 01.11.2026)
+- Haldus → Seadmed / Töökohad / Kasutajad → **🗑 Kustuta** (kinnitus jah/ei). Kirje kaob kohe kõigile peale halduri (ka superkasutajale): otsing, laod, skännimine („Tundmatu QR-kood“), sisselogimine.
+- Halduses on kustutatud rida läbikriipsutatud ja nupp **↩ Taasta (N p)**. Pärast 30 päeva kustutatakse kirje lõplikult (Durable Objecti alarm ja halduse ülevaate avamine) ja nupp on „Taastamine aegunud“.
+- Lõplikul kustutamisel kaob seadmel ka märkused ja ajalugu, kasutajal telefoni indeks (sama numbriga saab uuesti registreeruda) ja kinnitused. **Üldine sündmuste logi jääb alles** (tõend).
+- Ei saa kustutada: seadet, mis on kellegi nimel; kasutajat, kelle nimel on seadmeid; ladu, mis on mõne seadme koduladu.
+
 ## Foto (valikuline)
 Foto võtmisel, tagastamisel ja märkusega (nt kahjustuse tõendamiseks vaidluses). Vajab R2 sidet `FOTOD` (`wrangler.toml`, plokk on kommenteeritud). Seadetes: `ei` / `valikuline` / `kohustuslik`. Telefon vähendab foto (≤ 1600 px JPEG, EXIF ja GPS kaovad); server kontrollib tüüpi ja suurust (≤ 1,5 MB). Fotot näeb ainult haldur (logi ja märkused, „📷 foto“). Säilitusaeg: sea R2 bucket'ile elutsükli reegel (nt 365 päeva) Cloudflare'i juhtpaneelis.
 
@@ -57,7 +63,7 @@ npx wrangler secret put TOKEN_SECRET      # openssl rand -base64 32
 npm run deploy
 ```
 Siis `/admin` → Seaded (firma nimi) → Töökohad (lisa, prindi plakat) → Seadmed (lisa, prindi sildid).
-**Domeen: `kratt.kindavel.ee`** (Margo otsus 01.11.2026; `wrangler.toml` `routes`; `qrwork.kindavel.ee` on üleminekuks alles, kustuta see pärast proovimist. Seni prinditud katsekleebised viitavad vanale domeenile). QR sisaldab aadressi püsivalt (`HTTPS://<DOMEEN>/S/<KOOD>`, suurtähtedega, alfanumeeriline režiim, veaparandus Q).
+**Domeen: `kratt.kindavel.ee`** (Margo otsus 01.11.2026; `wrangler.toml` `routes`; `qrwork.kindavel.ee` eemaldati 01.11.2026; sellele viitavad katsekleebised enam ei tööta). QR sisaldab aadressi püsivalt (`HTTPS://<DOMEEN>/S/<KOOD>`, suurtähtedega, alfanumeeriline režiim, veaparandus Q).
 
 ## Turvalisus ja privaatsus
 - Parool: PBKDF2-SHA256 (vaikimisi 100 000 iteratsiooni, 16-baidine sool). Sessioon: juhuslik 40-märgine token, serveris ainult SHA-256 räsi, küpsis `HttpOnly; Secure; SameSite=Lax`. API nõuab päist `X-QW: 1` (CSRF).

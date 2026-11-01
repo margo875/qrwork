@@ -219,3 +219,30 @@ test('inventarinumber automaatselt, superkasutaja, laod, kataloogi QR', async ()
   const { koodTekstist } = await import('../src/lehed.js');
   assert.deepEqual(koodTekstist(`https://t.ee/I/${b1.kood}`, 't.ee'), { liik: 'I', kood: b1.kood });
 });
+
+test('kustutamine: 30 päeva taastatav, siis lõplik', async () => {
+  const { env, reg, mari, jaan, s1, s2, A, koht, storage } = await alus();
+  await mari('/api/vota', { koodid: [s1.kood] });
+  assert.equal((await A('kustuta', { liik: 'seade', id: s1.kood })).status, 409, 'kasutuses seadet ei kustuta');
+  assert.equal((await A('kustuta', { liik: 'koht', id: koht.kood })).status, 409, 'laos on seadmeid');
+  assert.equal((await A('kustuta', { liik: 'seade', id: s2.kood })).j.ok, true);
+  assert.equal((await mari('/api/seade', { kood: s2.kood })).status, 404);
+  assert.equal((await mari('/api/otsi', { q: 'Laser' })).j.tulemused.length, 0);
+  assert.equal((await mari('/api/vota', { koodid: [s2.kood] })).j.tulemused[0].ok, false);
+  assert.ok((await A('ulevaade')).j.seadmed.find((x) => x.kood === s2.kood).kustutatud, 'haldur näeb');
+  assert.equal((await A('taasta', { liik: 'seade', id: s2.kood })).j.ok, true);
+  assert.equal((await mari('/api/seade', { kood: s2.kood })).status, 200);
+  // kasutaja: sessioon kaob, sisselogimine ei õnnestu
+  const jid = (await jaan('/api/mina')).j.kasutaja.id;
+  assert.equal((await A('kustuta', { liik: 'kasutaja', id: jid })).j.ok, true);
+  assert.equal((await jaan('/api/mina')).status, 401);
+  assert.equal((await klient(env)('/api/logi-sisse', { tel: '+37255555555', parool: 'salasõna2' })).status, 401);
+  // 31 päeva hiljem: lõplik kustutamine, taastada ei saa, telefoni saab uuesti kasutada
+  await A('kustuta', { liik: 'seade', id: s2.kood });
+  await reg.lopetaKustutamine(Date.now() + 31 * 86400000);
+  assert.equal(await storage.get(`seade:${s2.kood}`), undefined);
+  assert.equal(await storage.get(`kasutaja:${jid}`), undefined);
+  assert.equal((await A('taasta', { liik: 'seade', id: s2.kood })).status, 404);
+  assert.equal((await klient(env)('/api/registreeru', { nimi: 'Jaan Uus', tel: '+37255555555', parool: 'qwerty1', koht: koht.kood })).status, 200);
+  assert.ok((await A('logi')).j.logi.some((x) => x.tyyp === 'lopp_kustutatud'));
+});
