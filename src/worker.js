@@ -12,10 +12,10 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     const tee = url.pathname;
-    const m = /^\/([SKsk])\/([0-9A-Za-z]{12})\/?$/.exec(tee);
+    const m = /^\/([SKIski])\/([0-9A-Za-z]{12})\/?$/.exec(tee);
     if (request.method === 'GET' || request.method === 'HEAD') {
       if (tee === '/' || tee === '/index.html') return html(appLeht);
-      if (m) return html(appLeht, { [m[1].toUpperCase() === 'S' ? 'seade' : 'koht']: m[2].toUpperCase() });
+      if (m) return html(appLeht, { [{ S: 'seade', K: 'koht', I: 'info' }[m[1].toUpperCase()]]: m[2].toUpperCase() });
       if (tee === '/admin') return html(adminLeht);
       if (tee === '/jsqr.js') return new Response(JSQR_JS, { headers: { 'Content-Type': 'text/javascript; charset=utf-8', 'Cache-Control': 'public, max-age=86400', 'X-Content-Type-Options': 'nosniff' } });
       if (tee === '/robots.txt') return new Response('User-agent: *\nDisallow: /\n', { headers: { 'Content-Type': 'text/plain' } });

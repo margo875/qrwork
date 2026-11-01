@@ -7,9 +7,9 @@ import { koodTekstist, kasitsiKood } from '../src/lehed.js';
 async function alus() {
   const k = keskkond(); const A = admin(k.env);
   const koht = (await A('koht', { nimi: 'Ladu', registreerimine: 'vaba' })).j.koht;
-  const s1 = (await A('seade', { nimi: 'Nivelliir', invnr: 'INV-1' })).j.seade;
-  const s2 = (await A('seade', { nimi: 'Laser' })).j.seade;
-  const s3 = (await A('seade', { nimi: 'Puur' })).j.seade;
+  const s1 = (await A('seade', { nimi: 'Nivelliir', invnr: 'INV-1', asukoht: koht.kood })).j.seade;
+  const s2 = (await A('seade', { nimi: 'Laser', asukoht: koht.kood })).j.seade;
+  const s3 = (await A('seade', { nimi: 'Puur', asukoht: koht.kood })).j.seade;
   const mari = klient(k.env), jaan = klient(k.env);
   assert.equal((await mari('/api/registreeru', { nimi: 'Mari Maasikas', tel: '5123 4567', parool: 'salasõna', koht: koht.kood })).status, 200);
   assert.equal((await jaan('/api/registreeru', { nimi: 'Jaan Tamm', tel: '+37255555555', parool: 'salasõna2', koht: koht.kood })).status, 200);
@@ -114,7 +114,7 @@ test('tagastus teise eest ja halduri keelu eemaldamine', async () => {
 });
 
 test('remont, taatlus, limiit, tundmatu kood', async () => {
-  const { mari, s1, s2, s3, A } = await alus();
+  const { mari, s1, s2, s3, A, koht } = await alus();
   await A('seade', { kood: s1.kood, nimi: 'Nivelliir', olek: 'remondis' });
   await A('seade', { kood: s2.kood, nimi: 'Laser', taatlus_kuni: '2020-01-01' });
   let r = await mari('/api/vota', { koodid: [s1.kood, s2.kood] });
@@ -122,7 +122,7 @@ test('remont, taatlus, limiit, tundmatu kood', async () => {
   assert.match(r.j.tulemused[1].viga, /Taatlus/);
   assert.equal((await mari('/api/seade', { kood: 'ABCDEFGHJK01' })).status, 404);
   await A('seaded', { max_seadmeid: 1 });
-  await A('seade', { nimi: 'XX' });
+  await A('seade', { nimi: 'XX', asukoht: koht.kood });
   const s4 = (await A('ulevaade')).j.seadmed.find((s) => s.nimi === 'XX');
   r = await mari('/api/vota', { koodid: [s3.kood, s4.kood] });
   assert.deepEqual(r.j.tulemused.map((x) => x.ok), [true, false]);
@@ -188,4 +188,34 @@ test('ülevaatuse parandused: ootel kasutaja, IPv6, koduladu', async () => {
   await A('seade', { kood: s1.kood, nimi: 'Nivelliir', asukoht: '' });
   s = (await A('ulevaade')).j.seadmed.find((x) => x.kood === s1.kood);
   assert.equal(s.koduladu, null);
+});
+
+test('inventarinumber automaatselt, superkasutaja, laod, kataloogi QR', async () => {
+  const { env, mari, A, koht } = await alus();
+  assert.equal(koht.lyhend, 'L1');
+  const k2 = (await A('koht', { nimi: 'Objekt', lyhend: 'ob' })).j.koht;
+  assert.equal(k2.lyhend, 'OB');
+  assert.equal((await A('koht', { nimi: 'Topelt', lyhend: 'L1' })).status, 409);
+  const aakk = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Tallinn' }).slice(2, 7).replace('-', '');
+  const a1 = (await A('seade', { nimi: 'Mõõtelint', asukoht: koht.kood })).j.seade;
+  const a2 = (await A('seade', { nimi: 'Mõõtelint 2', asukoht: koht.kood })).j.seade;
+  const b1 = (await A('seade', { nimi: 'Kiiver', asukoht: k2.kood })).j.seade;
+  assert.equal(a2.invnr.slice(0, 3), 'L1-'); assert.equal(a2.invnr, `L1-${aakk}${String(Number(a1.invnr.slice(-3)) + 1).padStart(3, '0')}`);
+  assert.equal(b1.invnr, `OB-${aakk}001`);
+  assert.equal((await A('seade', { nimi: 'Ladu puudub' })).status, 400);
+  // tavakasutaja: tühi otsing ei näita midagi, laod keelatud
+  assert.equal((await mari('/api/otsi', { q: '' })).j.vaja_paringut, true);
+  assert.equal((await mari('/api/otsi', { q: 'kiiver' })).j.tulemused.length, 1);
+  assert.equal((await mari('/api/laod', {})).status, 403);
+  const id = (await mari('/api/mina')).j.kasutaja.id;
+  assert.equal((await A('kasutaja', { id, super: true })).j.ok, true);
+  assert.ok((await mari('/api/otsi', { q: '' })).j.tulemused.length >= 6);
+  await mari('/api/vota', { koodid: [b1.kood] });
+  const l = (await mari('/api/laod', {})).j.laod;
+  assert.equal(l.find((x) => x.lyhend === 'OB').valjas[0].nimi, 'Kiiver');
+  // kataloogi URL avab lehe
+  const c = klient(env);
+  assert.equal((await c(`/I/${b1.kood}`, null, 'GET')).status, 200);
+  const { koodTekstist } = await import('../src/lehed.js');
+  assert.deepEqual(koodTekstist(`https://t.ee/I/${b1.kood}`, 't.ee'), { liik: 'I', kood: b1.kood });
 });
