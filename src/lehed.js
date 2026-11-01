@@ -120,11 +120,11 @@ function pohi(teade){
    (ootel?'<div class="hoiatus">Sinu konto ootab administraatori kinnitust. Seadmeid saad võtta pärast kinnitamist.</div>':'')+
    (m.kinnitamata.length?'<h2>Vajab sinu vastust</h2><p class="vaike">Enne uue seadme võtmist vasta allolevale.</p>'+m.kinnitamata.map(kinnitusHTML).join(''):'')+
    '<button class="suur roh" id="vota"'+(ootel||m.kinnitamata.length?' disabled':'')+'>📥 Võta seade</button>'+
-   '<button class="suur sin" id="tagasta"'+(m.seadmed.length?'':' disabled')+'>📤 Tagasta seade</button>'+
+   '<button class="suur sin" id="tagasta"'+(ootel?' disabled':'')+'>📤 Tagasta seade</button>'+
    '<h2>Minu seadmed ('+m.seadmed.length+'/'+m.max_seadmeid+')</h2>'+
    (m.seadmed.length?'<ul class="loend">'+m.seadmed.map(s=>'<li data-kood="'+esc(s.kood)+'"><b>'+esc(s.nimi)+'</b>'+(s.invnr?' <span class="vaike">'+esc(s.invnr)+'</span>':'')+'<br><span class="vaike">alates '+esc(aeg(s.alates))+(paevi(s.alates)>0?' ('+paevi(s.alates)+' p)':'')+'</span></li>').join('')+'</ul>':'<p class="vaike">Sinu nimel ei ole praegu ühtegi seadet.</p>')+
-   '<button class="suur" id="otsi">🔍 Kus on seade?</button><p class="vaike" style="text-align:center"><a href="#" id="valja">Logi välja</a></p>');
-  $('#vota').onclick=()=>skanner('vota'); $('#tagasta').onclick=()=>skanner('tagasta'); $('#otsi').onclick=otsing;
+   (ootel?'':'<button class="suur" id="otsi">🔍 Kus on seade?</button>')+'<p class="vaike" style="text-align:center"><a href="#" id="valja">Logi välja</a></p>');
+  $('#vota').onclick=()=>skanner('vota'); $('#tagasta').onclick=()=>skanner('tagasta'); if($('#otsi'))$('#otsi').onclick=otsing;
   $('#valja').onclick=async e=>{e.preventDefault();await api('/api/logi-valja');S.mina=null;sisene();};
   document.querySelectorAll('ul.loend li').forEach(li=>li.onclick=()=>seadmeVaade(li.dataset.kood,false));
   document.querySelectorAll('[data-id]').forEach(el=>{
@@ -212,6 +212,7 @@ function skanner(reziim){
   const lisa=async kood=>{
     if(valik.some(x=>x.kood===kood)){teade('See seade on juba nimekirjas.','hoiatus');return;}
     const j=await api('/api/seade',{kood});
+    if(j.status===401) return sisene();
     if(!j.ok){teade(j.status===404?'Tundmatu QR-kood. Pöördu administraatori poole.':(j.viga||'Viga'));if(navigator.vibrate)navigator.vibrate([200,100,200]);return;}
     if(navigator.vibrate)navigator.vibrate(80);
     valik.push({kood,info:j,ule:false,teise:false}); teade('Lisatud: '+j.seade.nimi,'ok'); joonista();
@@ -227,6 +228,7 @@ function skanner(reziim){
     const foto=fotoVoti('foto_s');
     const j=vota?await api('/api/vota',{koodid,ule:valik.filter(x=>x.ule).map(x=>x.kood),koht:S.koht&&S.koht.kood,foto})
                :await api('/api/tagasta',{koodid,teise_eest:valik.filter(x=>x.teise).map(x=>x.kood),koht:S.koht&&S.koht.kood,foto});
+    if(j.status===401) return sisene();
     if(!j.ok){teade(j.viga||'Viga');$('#kinnita').disabled=false;return;}
     S.mina=j.mina;
     const okk=j.tulemused.filter(r=>r.ok), vead=j.tulemused.filter(r=>!r.ok);
@@ -256,9 +258,10 @@ async function seadmeVaade(kood,skannitud){
     else if(v.lubatud&&!v.vaja_ule) h+='<button class="suur roh" id="vota1">📥 Võta</button>';
     else if(v.lubatud&&v.vaja_ule) h+='<label class="mark"><input type="checkbox" id="ule1"><span>Võtan seadme üle. '+esc(kel.nimi)+' peab kinnitama, et tagastas või andis seadme üle, enne kui saab ise uusi seadmeid võtta.</span></label><button class="suur roh" id="vota1" disabled>📥 Võta üle</button>';
     else if(!v.juba) h+='<div class="viga">⛔ '+esc(v.pohjus)+'</div>';
-    if(!j.minu&&kel) h+='<label class="mark"><input type="checkbox" id="teise1"><span>Seade on siin tagasi, märgin selle tagastatuks '+esc(kel.nimi)+' eest.</span></label><button class="suur" id="tagastaTeise" disabled>Märgi tagastatuks</button>';
+    if(!j.minu&&kel&&S.mina&&S.mina.kasutaja.olek==='aktiivne') h+='<label class="mark"><input type="checkbox" id="teise1"><span>Seade on siin tagasi, märgin selle tagastatuks '+esc(kel.nimi)+' eest.</span></label><button class="suur" id="tagastaTeise" disabled>Märgi tagastatuks</button>';
   }
-  h+='<h2>Märkus</h2><div class="kaart"><p class="vaike">Registriandmeid muudab administraator. Sina saad lisada märkuse.</p><select id="mtyyp"><option value="">— vali —</option>'+
+  const aktiivne=S.mina&&S.mina.kasutaja.olek==='aktiivne';
+  if(aktiivne) h+='<h2>Märkus</h2><div class="kaart"><p class="vaike">Registriandmeid muudab administraator. Sina saad lisada märkuse.</p><select id="mtyyp"><option value="">— vali —</option>'+
    Object.entries(j.marke_tyybid).map(([k,t])=>'<option value="'+k+'">'+esc(t)+'</option>').join('')+'</select><textarea id="mtekst" rows="2" maxlength="500" placeholder="Täpsustus (valikuline)"></textarea>'+
    (S.mina&&S.mina.foto!=='ei'?'<label for="foto_m">📷 Foto (valikuline)</label><input type="file" accept="image/*" capture="environment" id="foto_m"><div id="foto_m_t"></div>':'')+'<button id="msaada">Lisa märkus</button><div id="mteade"></div>'+
    (s.margmed.length?'<ul class="loend">'+s.margmed.map(m=>'<li><b>'+esc(j.marke_tyybid[m.tyyp])+'</b> <span class="vaike">'+esc(m.nimi)+', '+esc(aeg(m.aeg))+'</span>'+(m.tekst?'<br>'+esc(m.tekst):'')+'</li>').join('')+'</ul>':'')+'</div>'+
@@ -274,7 +277,7 @@ async function seadmeVaade(kood,skannitud){
   if($('#vota1'))$('#vota1').onclick=()=>tee('/api/vota',{koodid:[kood],ule:$('#ule1')&&$('#ule1').checked?[kood]:[]});
   if($('#tagasta1'))$('#tagasta1').onclick=()=>tee('/api/tagasta',{koodid:[kood]});
   if($('#tagastaTeise'))$('#tagastaTeise').onclick=()=>tee('/api/tagasta',{koodid:[kood],teise_eest:[kood]});
-  $('#msaada').onclick=async()=>{const r=await api('/api/marge',{kood,tyyp:$('#mtyyp').value,tekst:$('#mtekst').value,foto:fotoVoti('foto_m')});
+  if($('#msaada'))$('#msaada').onclick=async()=>{const r=await api('/api/marge',{kood,tyyp:$('#mtyyp').value,tekst:$('#mtekst').value,foto:fotoVoti('foto_m')});
     $('#mteade').innerHTML=r.ok?'<div class="ok">Märkus lisatud, administraator näeb seda.</div>':'<div class="viga">'+esc(r.viga)+'</div>'; if(r.ok){$('#mtekst').value='';}};
   $('#tagasi').onclick=()=>{history.replaceState(null,'','/');pohi();};
 }
@@ -370,7 +373,7 @@ function seadmed(muuda){
    '<div><label>Inventarinumber</label><input id="s_invnr" value="'+esc(s.invnr)+'"></div><div><label>Seerianumber</label><input id="s_seerianr" value="'+esc(s.seerianr)+'"></div>'+
    '<div><label>Taatlus/kalibreerimine kehtib kuni</label><input id="s_taatlus" type="date" value="'+esc(s.taatlus_kuni)+'"></div>'+
    '<div><label>Olek</label><select id="s_olek">'+Object.entries(OLEK).map(([k,t])=>'<option value="'+k+'"'+(s.olek===k?' selected':'')+'>'+t+'</option>').join('')+'</select></div>'+
-   '<div><label>Asukoht (koduladu)</label><select id="s_asukoht">'+kohaValik(s.asukoht)+'</select></div>'+
+   '<div><label>Koduladu</label><select id="s_asukoht">'+kohaValik(s.koduladu)+'</select></div>'+
    (muuda?'':'<div><label>Olemasolev kood (valikuline, 12 märki)</label><input id="s_kood" placeholder="tühi = uus kood"></div>')+
    '</div><label>Lisainfo (kasutajad näevad)</label><textarea id="s_lisa" rows="2">'+esc(s.lisainfo)+'</textarea>'+
    '<button class="roh" id="s_salv">'+(muuda?'Salvesta':'Lisa seade')+'</button> '+(muuda?'<button id="s_loobu">Loobu</button> <button id="s_ajalugu">Ajalugu</button>':'')+'<div id="s_teade"></div><div id="s_aj"></div></div>'+
@@ -416,7 +419,7 @@ function kasutajad(){
 }
 const SYND={vott:'võttis',tagastus:'tagastas',ulevott:'võttis üle',tagastus_teise_eest:'märkis tagastatuks teise eest',kinnitas:'kinnitas ülevõtu',vaidlus:'vaidlustas',marge:'märkus',registreerus:'registreerus',leiuteade:'leiuteade',tagastus_halduri_poolt:'haldur tagastas',seade_lisatud:'seade lisatud',seade_muudetud:'seade muudetud',kasutaja_kinnitatud:'kasutaja aktiveeritud',kasutaja_peatatud:'kasutaja peatatud',keeld_eemaldatud:'keeld eemaldatud',taastuskood:'taastuskood antud',parool_taastatud:'parool taastatud',marge_lahendatud:'märkus lahendatud',vaidlus_lahendatud:'vaidlus lahendatud'};
 function logiTabel(l){const sn=k=>(U.seadmed.find(s=>s.kood===k)||{}).nimi||k||'';
-  return '<table><tr><th>Aeg</th><th>Sündmus</th><th>Seade</th><th>Kes</th><th>Lisa</th></tr>'+l.map(x=>'<tr><td>'+esc(aeg(x.aeg))+'</td><td>'+esc(SYND[x.tyyp]||x.tyyp)+'</td><td>'+esc(sn(x.kood))+'</td><td>'+esc(x.nimi||'')+'</td><td>'+esc([x.eelmise_nimi&&('eelmine: '+x.eelmise_nimi),x.uus&&('uus: '+x.uus),x.marge,x.tekst,x.kontakt,x.linn,x.gps&&('📍 '+x.gps.lat+','+x.gps.lon)].filter(Boolean).join(' · '))+(x.foto?' <a href="#" data-foto="'+esc(x.foto)+'">📷 foto</a>':'')+'</td></tr>').join('')+'</table>';}
+  return '<table><tr><th>Aeg</th><th>Sündmus</th><th>Seade</th><th>Kes</th><th>Lisa</th></tr>'+l.map(x=>'<tr><td>'+esc(aeg(x.aeg))+'</td><td>'+esc(SYND[x.tyyp]||x.tyyp)+'</td><td>'+esc(sn(x.kood||x.leidkood))+'</td><td>'+esc(x.nimi||'')+'</td><td>'+esc([x.eelmise_nimi&&('eelmine: '+x.eelmise_nimi),x.uus&&('uus: '+x.uus),x.marge,x.tekst,x.kontakt,x.linn,x.gps&&('📍 '+x.gps.lat+','+x.gps.lon)].filter(Boolean).join(' · '))+(x.foto?' <a href="#" data-foto="'+esc(x.foto)+'">📷 foto</a>':'')+'</td></tr>').join('')+'</table>';}
 document.addEventListener('click',async e=>{const f=e.target.closest&&e.target.closest('[data-foto]'); if(!f) return; e.preventDefault();
   const r=await fetch('/api/admin/foto?k='+encodeURIComponent(f.dataset.foto),{headers:{'Authorization':'Bearer '+TOK}}); if(!r.ok){alert('Fotot ei leitud');return;}
   const u=URL.createObjectURL(await r.blob()); const w=window.open(u,'_blank'); if(!w){location.href=u;}});

@@ -34,9 +34,14 @@ export default {
   },
 };
 
+// IPv6: /64 prefiks pärast „::“ lahtikirjutamist (L3: kokkusurutud kuju andis muidu erineva võtme)
 export function ipPrefiks(ip) {
   if (!ip.includes(':')) return ip;
-  return ip.split(':').slice(0, 4).join(':') + '::/64';
+  const [a, b = ''] = ip.toLowerCase().split('::');
+  const vasak = a ? a.split(':') : [], parem = ip.includes('::') && b ? b.split(':') : [];
+  const taidis = ip.includes('::') ? Array(Math.max(0, 8 - vasak.length - parem.length)).fill('0') : [];
+  const osad = [...vasak, ...taidis, ...parem].map((x) => (parseInt(x, 16) || 0).toString(16));
+  return osad.slice(0, 4).join(':') + '::/64';
 }
 async function ipRasi(env, ip) {
   const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${env.TOKEN_SECRET || 'qrwork'}|${ipPrefiks(ip)}`));

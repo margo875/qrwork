@@ -161,7 +161,31 @@ test('vaikimisi registreerimine vajab halduri kinnitust', async () => {
   const c = klient(env);
   const r = await c('/api/registreeru', { nimi: 'Uus Töötaja', tel: '53333333', parool: 'qwerty1', koht: koht2.kood });
   assert.equal(r.j.mina.kasutaja.olek, 'ootel');
-  assert.equal((await c('/api/vota', { koodid: [s1.kood] })).j.tulemused[0].ok, false);
+  assert.equal((await c('/api/vota', { koodid: [s1.kood] })).status, 403);
   assert.equal((await A('kasutaja', { id: r.j.mina.kasutaja.id, olek: 'aktiivne' })).j.ok, true);
   assert.equal((await c('/api/vota', { koodid: [s1.kood] })).j.tulemused[0].ok, true);
+});
+
+test('ülevaatuse parandused: ootel kasutaja, IPv6, koduladu', async () => {
+  const { env, mari, s1, A } = await alus();
+  const { ipPrefiks } = await import('../src/worker.js');
+  assert.equal(ipPrefiks('2001:db8::1'), ipPrefiks('2001:0db8:0:0:5::9'));
+  assert.equal(ipPrefiks('2001:db8:1:2::1'), '2001:db8:1:2::/64');
+  await mari('/api/vota', { koodid: [s1.kood] });
+  const koht2 = (await A('koht', { nimi: 'Objekt' })).j.koht;
+  const c = klient(env);
+  await c('/api/registreeru', { nimi: 'Võõras Inimene', tel: '54444444', parool: 'qwerty1', koht: koht2.kood });
+  assert.equal((await c('/api/otsi', { q: '' })).status, 403);
+  assert.equal((await c('/api/marge', { kood: s1.kood, tyyp: 'ei_toota' })).status, 403);
+  const kaart = (await c('/api/seade', { kood: s1.kood })).j.seade;
+  assert.equal(JSON.stringify(kaart).includes('Mari'), false); assert.equal(JSON.stringify(kaart).includes('+372'), false);
+  // koduladu ei muutu tagastusel, tühjendamine töötab
+  const ladu = (await A('koht', { nimi: 'Keskladu' })).j.koht;
+  await A('seade', { kood: s1.kood, nimi: 'Nivelliir', asukoht: ladu.kood });
+  await mari('/api/tagasta', { koodid: [s1.kood], koht: koht2.kood });
+  let s = (await A('ulevaade')).j.seadmed.find((x) => x.kood === s1.kood);
+  assert.equal(s.koduladu, ladu.kood); assert.equal(s.asukoht, koht2.kood);
+  await A('seade', { kood: s1.kood, nimi: 'Nivelliir', asukoht: '' });
+  s = (await A('ulevaade')).j.seadmed.find((x) => x.kood === s1.kood);
+  assert.equal(s.koduladu, null);
 });

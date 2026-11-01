@@ -28,6 +28,7 @@ test('foto võtmisel, ajalugu kuupäevadega, kohustuslik foto', async () => {
   assert.equal((await c('/api/vota', { koodid: [s1.kood], foto: 'f/XXXXXXXXXX/0000000000000-AAAAAA.jpg' })).status, 400, 'võõras foto');
   let r = await c('/api/vota', { koodid: [s1.kood], foto: f.foto });
   assert.equal(r.j.tulemused[0].ok, true);
+  assert.equal((await c('/api/tagasta', { koodid: [s1.kood], foto: f.foto })).status, 400, 'sama fotot ei saa uuesti kasutada');
   r = await c('/api/seade', { kood: s1.kood });
   assert.equal(r.j.seade.ajalugu[0].tyyp, 'vott'); assert.equal(r.j.seade.ajalugu[0].foto, true); assert.ok(r.j.seade.ajalugu[0].aeg > 0);
   await A('seaded', { foto: 'kohustuslik' });

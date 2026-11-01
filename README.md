@@ -11,7 +11,7 @@ Cloudflare Worker + üks Durable Object (SQLite), sõltuvusi pole. Lähtekoht on
 | **Seadme QR** `/S/<kood>` | seadmel (kleebis) | sisse logitud töötaja skännib seda rakenduse skänneriga (nupud **Võta seade** / **Tagasta seade**) või telefoni kaameraga (avab seadme kaardi). Võõras inimene näeb leidja lehte („leia mind“). |
 
 - **Muu QR** rakenduse skanneris → „Tundmatu QR-kood. Pöördu administraatori poole.“ Sama teade tuleb, kui kood on õiges vormis, aga seadet registris pole.
-- **Kasutaja ei muuda registriandmeid** (nimi, inventari- ja seerianumber, taatlus, olek). Ta saab lisada ainult **märkuse**: *Ei tööta*, *Vajab taatlemist/kalibreerimist*, *Kahjustatud*, *Tarvik puudu*, *Muu* (+ valikuline foto). Märkus jõuab haldurile (Telegram/ntfy ja halduse ülevaade) ning teised kasutajad näevad seda hoiatusena enne võtmist.
+- **Kasutaja ei muuda registriandmeid** (nimi, inventari- ja seerianumber, taatlus, olek). Ta saab lisada ainult **märkuse**: *Ei tööta*, *Vajab taatlemist/kalibreerimist*, *Kahjustatud*, *Tarvik puudu*, *Muu* (+ valikuline foto). Kõik märkused on halduse ülevaates; *Ei tööta*, *Vajab taatlemist* ja *Kahjustatud* saadetakse haldurile ka teavitusena (Telegram/ntfy). Teised kasutajad näevad lahendamata märkust (v.a *Muu*) hoiatusena enne võtmist.
 - **Kuupäevad:** iga sündmus (võtmine, tagastus, ülevõtt, tagastus teise eest, märkus, kinnitus, vaidlus) salvestatakse kuupäeva ja kellaajaga ning töökohaga. Seadme kaardil on ajalugu (15 viimast), halduses kogu logi ja CSV.
 
 ## Võtmise ja tagastamise reeglid (lahendus)
