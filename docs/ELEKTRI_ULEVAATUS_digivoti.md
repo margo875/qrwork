@@ -165,7 +165,7 @@ Põhireegel: **Shelly ei lülita lukuvoolu otse, kui lukk on magnetlukk või > 0
 | Luku vabanemisaeg TSS / avariinupuga | evakuatsiooniuksed | uks avaneb kohe; mõõda (nt < 1 s [HINNANG]) |
 | TSS variant (a/b): lukk tavaolekus lukus, häirel vaba | evakuatsiooniuksed | vastab skeemile märgitud variandile |
 | Pinge lukul külmas (kompensatsiooniga plokk) | konteiner (6.c) | ≤ luku ülapiir (p 2.1) |
-| Lõhe ja lühis TSS-liinil | TSS ATS-ettevõtjaga | keskseade näitab riket; lukk vaba lõhel |
+| Lõhe ja lühis TSS-liinil | TSS ATS-ettevõtjaga | keskseade näitab riket; variandis (a) lukk vaba lõhel, variandis (b) lõhe lukku ei vabasta (keskseade annab rikketeate) |
 | Võrgu ja serveri katkestus | kõik uksed | variant A: kasutajale teade; variant B: töötab; väljapääs alati |
 | Toitekatkestus + taaskäivitus | kõik releed | algolek lukus (fail-secure) / vaba (TSS); ei avane käivitusel |
 

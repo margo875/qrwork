@@ -47,3 +47,27 @@
 - **MINOR: 8** (nr 3–10).
 - **OK: 10** (nr 11–20). Kõik ülevaatuse arvutused pidasid kontrollarvutusel vastu.
 - **Otsus: VAJAB VERSIOONI.** Enne paigaldusjuhendit tuleb parandada leiud 1 ja 2. Leiud 3 ja 4 tuleb parandada samas versioonis.
+
+---
+
+## v2 kontroll (01.11.2026)
+
+Kontrollitud: `docs/ELEKTRI_ULEVAATUS_digivoti.md` v2 (kogu fail ja muudatuste logi). Vaatasin ainult seda, kas v0.1 kontrolli leiud on lahendatud ja kas parandused tõid uusi vigu.
+
+| Leid | Lahendatud? | Märkus |
+|---|---|---|
+| 1 ERROR, TSS vaherelee NO/NC | **jah** | #7, p 2.9, p 7 vastus 3 ja BOM #13 kirjeldavad nüüd variante (a) ja (b). Variant (a): mähis on tavaolekus pinge all ja luku ahelas on K1 NO. Variant (b): järelevalvega väljund pingestub häirel ja luku ahelas on K1 NC. Mõlema juures on õigesti kirjas, mida katkemine ja lühis põhjustavad. Hoiatus, et (b) väljundit ei tohi kombineerida NO kontaktiga, on lisatud. p 4.2 sai juurde rea „TSS variant“. Loogika on õige. |
+| 2 ERROR, temperatuurikompensatsioon | **jah** | 0,72 V → ~14,5 V. #2 vahemik on nüüd 10,5…14,6 V. p 2.1 annab neli lahendust ja BOM #10 ning p 4.2 rida on uuendatud. Lahenduse (4) „ülapiir nt 14,1 V“ korral tuleb samuti kontrollida, kas lukk talub 14,1 V, sest see on üle 13,8 V. Väike asi, eraldi leiuks ei loe. |
+| 3 MINOR, 26/33 Ah ja 5 A plokk | jah | Paranduse arvud (33 Ah, 1,32 A, 4,05 A, 5,06 A, ≥ 6 A) on õiged. Rööbitiühenduse tingimused on lisatud ja BOM #5 hinnamõju on uuendatud. |
+| 4 MINOR, avariinupu poolused | jah | #8 on ühtlustatud p 2.9-ga: kui on vaja nii toitejuhtmete katkestust kui ka häiret, on vaja 3 kontakti. |
+| 5 MINOR, ρ₁ = 1,25 · ρ₀ | jah | — |
+| 6 MINOR, kompensatsiooni tegur | jah | +0,7…0,8 V. |
+| 7 MINOR, aku 7 / 7,2 Ah | jah | 7 · 0,8 / 0,85 = 6,6 h, õige. Viide on parandatud (#14). |
+| 8 MINOR, haru lühisekaitse | jah | Arvutus 10 Ω / 1,4 A on õige. Väike märkus: „T500 mA, kui koormus lubab“ ei sobi 0,5 A magnetlukule, sest kaitsme nimivool ei tohi olla võrdne püsikoormusega [HINNANG]. Eraldi leiuks ei loe. |
+| 9 MINOR, SPD standard ja SELV | jah | EVS-HD 60364-5-53:2022 on lisatud, olek on märgitud [evs 01.11.2026] ja asendussuhe [KONTROLLIMATA]. Mina olekut üle ei kontrollinud. GDT lause on lisatud. |
+| 10 MINOR, kuldkontaktid | jah | — |
+| **Uus 11** | MINOR | **p 4.2 rida „Lõhe ja lühis TSS-liinil“** ootab tulemust „lukk vaba lõhel“. Variandis (b) lõhe lukku ei vabasta (seda ütlevad #7 ja p 2.9 ise). Seega annaks õigesti paigaldatud variant (b) kasutuselevõtu katsel ekslikult „mittevastav“. Parandus: „keskseade näitab riket; lõhel lukk vaba ainult variandis (a)“. |
+
+Uusi ERROR-eid parandused ei toonud. Leitud on 1 uus MINOR (nr 11).
+
+**Uus hinne: 9/10.** **Otsus: RAHUL.** Kriitilisi ja olulisi leide ei ole. Leid 11 on soovitatav parandada järgmisel muutmisel, enne kui p 4.2 kasutatakse kasutuselevõtu protokollina.
