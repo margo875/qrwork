@@ -2,10 +2,10 @@ name = "qrwork"
 main = "src/worker.js"
 compatibility_date = "2025-06-01"
 
-# Domeen on Margo otsus (nt tooriist.kindavel.ee). Kuni otsuseni töötab *.workers.dev aadressil.
-# NB: QR-kleebistesse läheb aadress püsivalt, seega vali domeen ENNE kleebiste printimist.
-workers_dev = true
-# routes = [{ pattern = "tooriist.kindavel.ee", custom_domain = true }]
+# Domeen: qrwork.kindavel.ee (Margo otsus 01.11.2026). kindavel.ee DNS on samas Cloudflare'i kontos,
+# custom_domain loob DNS-kirje ja sertifikaadi esimesel deploy'l. QR-kleebistes on aadress püsivalt, seda ei muudeta.
+routes = [{ pattern = "qrwork.kindavel.ee", custom_domain = true }]
+workers_dev = false
 
 # Kõik andmed (register, kasutajad, laenud, logi) on ühes Durable Objectis (SQLite, tasuta plaanil lubatud).
 [[durable_objects.bindings]]

@@ -6,7 +6,7 @@ import { koodTekstist, kasitsiKood } from '../src/lehed.js';
 
 async function alus() {
   const k = keskkond(); const A = admin(k.env);
-  const koht = (await A('koht', { nimi: 'Ladu' })).j.koht;
+  const koht = (await A('koht', { nimi: 'Ladu', registreerimine: 'vaba' })).j.koht;
   const s1 = (await A('seade', { nimi: 'Nivelliir', invnr: 'INV-1' })).j.seade;
   const s2 = (await A('seade', { nimi: 'Laser' })).j.seade;
   const s3 = (await A('seade', { nimi: 'Puur' })).j.seade;
@@ -153,3 +153,15 @@ test('leidja ja lehed', async () => {
   assert.equal((await A_bad(env)).status, 401);
 });
 async function A_bad(env) { return admin({ ...env, ADMIN_TOKEN: 'vale'.repeat(5) })('ulevaade'); }
+
+test('vaikimisi registreerimine vajab halduri kinnitust', async () => {
+  const { env, s1 } = await alus();
+  const A = admin(env);
+  const koht2 = (await A('koht', { nimi: 'Objekt' })).j.koht;
+  const c = klient(env);
+  const r = await c('/api/registreeru', { nimi: 'Uus Töötaja', tel: '53333333', parool: 'qwerty1', koht: koht2.kood });
+  assert.equal(r.j.mina.kasutaja.olek, 'ootel');
+  assert.equal((await c('/api/vota', { koodid: [s1.kood] })).j.tulemused[0].ok, false);
+  assert.equal((await A('kasutaja', { id: r.j.mina.kasutaja.id, olek: 'aktiivne' })).j.ok, true);
+  assert.equal((await c('/api/vota', { koodid: [s1.kood] })).j.tulemused[0].ok, true);
+});

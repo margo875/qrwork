@@ -33,7 +33,7 @@ const TEAVITA_MARGE = new Set(['ei_toota', 'taatlus', 'kahjustus']);
 export const VAIKESEADED = {
   firma: 'Firma',
   max_seadmeid: 20,           // korraga ühe kasutaja nimel
-  registreerimine: 'vaba',    // 'vaba' | 'kinnitamisega' (vaikimisi; töökoht võib üle kirjutada)
+  registreerimine: 'kinnitamisega', // 'vaba' | 'kinnitamisega' (Margo otsus 01.11.2026: halduri kinnitusega; töökoht võib üle kirjutada)
   taatlus_blokeerib: true,    // aegunud taatlusega seadet ei saa võtta
   hoiata_paevi: 14,           // halduse ülevaates: kasutuses kauem kui N päeva
   taatlus_hoiatus_paevi: 30,  // seadme kaardil hoiatus N päeva enne taatluse tähtaega

@@ -23,7 +23,7 @@ Cloudflare Worker + üks Durable Object (SQLite), sõltuvusi pole. Lähtekoht on
    - A kasutus lõpeb (logis „võttis üle“), seade on B nimel;
    - A saab avalehel teate „<seade> oli sinu nimel … B võttis selle üle …“ ja **ei saa uusi seadmeid võtta**, kuni ta vastab;
    - A vastab **„Jah, tagastasin / andsin üle“** → keeld kaob, A „hilinenud tagastuste“ arv suureneb (näha halduses);
-   - või **„Ei, vaidlustan“** + põhjendus → keeld kaob, vaidlus läheb haldurile (teavitus + ülevaade).
+   - või **„Ei, vaidlustan“** + põhjendus → keeld kaob kohe (Margo otsus 01.11.2026, et töö ei seiskuks), vaidlus läheb haldurile (teavitus + ülevaade).
    - Keeld puudutab ainult **uute** seadmete võtmist: A saab oma teisi seadmeid tagastada ja märkusi lisada.
 5. **Seadme otse üleandmine kolleegile** käib sama mehhanismiga (B võtab üle, A kinnitab „andsin üle“). Eraldi „anna üle“ nuppu pole vaja.
 6. **Tagastus teise eest:** kui seade on laos tagasi, aga A unustas registreerida, saab teine kasutaja selle skännida tagastuses ja märkida **„tagastatuks A eest“**. A saab sama kinnitamise kohustuse kui ülevõtul. Haldur võib tagastuse registreerida ka ise (ilma keeluta).
@@ -38,7 +38,7 @@ Foto võtmisel, tagastamisel ja märkusega (nt kahjustuse tõendamiseks vaidluse
 ## Haldus `/admin` (ADMIN_TOKEN)
 - **Ülevaade:** vaidlused, kinnitust ootavad kasutajad, kinnitamata ülevõtud (keelu eemaldamine), märkused (lahendamine), taatlus aegub/aegunud, kasutuses seadmed (päevade arv, üle `hoiata_paevi` punasena, „Tagasta (haldur)“).
 - **Seadmed:** lisa/muuda (nimi, tüüp, inventari- ja seerianumber, taatlus kuni, olek, koduladu, lisainfo, valikuliselt olemasolev 12-märgine kood), ajalugu, **sildid printimiseks** (32 × 44 mm, QR 28 mm + nimi + inventarinr + kood), CSV.
-- **Töökohad:** lisa/muuda, **A4 plakat** töökoha QR-iga ja juhisega; registreerimine *vaba* või *administraatori kinnitusega* (töökoha või üldise seade kaupa).
+- **Töökohad:** lisa/muuda, **A4 plakat** töökoha QR-iga ja juhisega; registreerimine *vaba* või *administraatori kinnitusega* (töökoha või üldise seade kaupa). **Vaikimisi administraatori kinnitusega** (Margo otsus 01.11.2026): uus kasutaja saab sisse logida, aga seadmeid võtta alles pärast kinnitamist (halduse ülevaade „Ootavad kinnitust“, teavitus Telegrami/ntfy-sse).
 - **Kasutajad:** aktiveeri/peata, **taastuskood** parooli unustamisel (8 märki, 24 h; kasutaja sisestab selle „Unustasid parooli?“ all), keelu eemaldamine, hilinenud tagastuste arv.
 - **Logi** (300 viimast, CSV kuni 5000) ja **Seaded** (firma nimi, leidja kontakttelefon, limiit, registreerimine, hoiatuste päevad, taatluse keeld, foto).
 
@@ -51,7 +51,7 @@ npx wrangler secret put TOKEN_SECRET      # openssl rand -base64 32
 npm run deploy
 ```
 Siis `/admin` → Seaded (firma nimi) → Töökohad (lisa, prindi plakat) → Seadmed (lisa, prindi sildid).
-**Domeen** (nt `tooriist.kindavel.ee`) tuleb valida enne kleebiste printimist: QR sisaldab aadressi püsivalt (`HTTPS://<DOMEEN>/S/<KOOD>`, suurtähtedega, alfanumeeriline režiim, veaparandus Q).
+**Domeen: `qrwork.kindavel.ee`** (Margo otsus 01.11.2026; `wrangler.toml` `routes`). QR sisaldab aadressi püsivalt (`HTTPS://<DOMEEN>/S/<KOOD>`, suurtähtedega, alfanumeeriline režiim, veaparandus Q).
 
 ## Turvalisus ja privaatsus
 - Parool: PBKDF2-SHA256 (vaikimisi 100 000 iteratsiooni, 16-baidine sool). Sessioon: juhuslik 40-märgine token, serveris ainult SHA-256 räsi, küpsis `HttpOnly; Secure; SameSite=Lax`. API nõuab päist `X-QW: 1` (CSRF).
