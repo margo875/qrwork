@@ -118,7 +118,7 @@ def skeem_teekond(tee):
     im = Image.new("RGB", (W, H), "white"); d = ImageDraw.Draw(im)
     tsin, hele, akt = "#14213D", "#EEF1F6", "#F2A541"
     sammud = ["1. Haldur loob\nkasutaja ja\nkutse-QR", "2. Töötaja skännib\nkutse, valib PIN-i;\ntelefon jääb sisse", "3. Skänn uksel →\nõigus → logi →\nrelee avab",
-              "4. Automaat: toode\n→ kinnitus → ost\nkuu summasse", "5. Haldur:\n„Töösuhe lõppes“\n→ kõik kinni", "6. Kuu lõpp:\nkinnitus, CSV\nraamatupidamisse"]
+              "4. Automaat: toode\n→ kinnitus → ost\nkuu summasse", "5. Haldur:\n„Töösuhe lõppes“\n→ kõik kinni", "6. Kuu lõpp: CSV;\nnõusolek kinni-\npidamiseks (plaan)"]
     w = 300; g = 30; x = 30
     for i, s in enumerate(sammud):
         taust = "#FDF1DF" if i == 4 else hele
@@ -126,7 +126,7 @@ def skeem_teekond(tee):
         if i < len(sammud) - 1:
             nool(d, (x + w + 2, 260), (x + w + g - 2, 260), w=4)
         x += w + g
-    d.text((30, 30), "Kasutaja ja halduri teekond (näidise 5-minutiline stsenaarium)", font=f(40, True), fill=tsin)
+    d.text((30, 30), "Sihtteekond (näidises sammud 1–5; samm 6 osaliselt)", font=f(40, True), fill=tsin)
     d.text((30, 440), "Sama telefon ja sama andmebaas kõigil sammudel; iga samm logitakse.", font=f(28), fill="#333333")
     im.save(tee)
 
@@ -224,10 +224,10 @@ def H2(t):
 def H3(t):
     return doc.add_heading(t, level=3)
 
-def B(items, stiil="List Bullet"):
+def B(items, stiil="List Bullet", sz=None):
     for it in items:
         par = doc.add_paragraph(style=stiil)
-        lisa_tekst(par, it)
+        lisa_tekst(par, it, sz=sz)
         par.paragraph_format.space_after = Pt(2)
 
 def N(items):
@@ -355,7 +355,7 @@ def lehekülg():
     hp = s.header.paragraphs[0]
     lisa_tekst(hp, "QR-digivõti – süsteemi kirjeldus", sz=8.5, varv=HALL)
     hp.add_run("\t\t")
-    r = hp.add_run("v1.0 mustand · 01.11.2026"); r.font.size = Pt(8.5); r.font.color.rgb = HALL
+    r = hp.add_run("v1.1 mustand · 01.11.2026"); r.font.size = Pt(8.5); r.font.color.rgb = HALL
     hp.paragraph_format.tab_stops.add_tab_stop(Cm(16.6), alignment=2)
     fp = s.footer.paragraphs[0]; fp.alignment = WD_ALIGN_PARAGRAPH.CENTER
     r = fp.add_run("[ettevõtte nimi] · Margo Pädam · lk "); r.font.size = Pt(8.5); r.font.color.rgb = HALL
@@ -376,13 +376,25 @@ def kaas():
       "ligipääs, kasutuse logi ja kuu lõpu aruanne raamatupidamisse.", sz=13, varv=HALL, after=30)
     for _ in range(6):
         doc.add_paragraph()
-    for rida in ("[ettevõtte nimi]", "Koostaja: Margo Pädam, ehitusinsener", "Kuupäev: 01.11.2026", "Versioon: 1.0 (mustand)"):
+    for rida in ("[ettevõtte nimi]", "Koostaja: Margo Pädam, ehitusinsener", "Kuupäev: 01.11.2026", "Versioon: 1.1 (mustand)"):
         P(rida, sz=12, varv=SININE, after=2)
     doc.add_paragraph()
-    P("Dokument koondab kontseptsiooni, Ehitusinseneri tehnilise lahenduse, Elektriinseneri ülevaatuse, Nõuniku õigusliku "
-      "raamistiku ja töötava näidise seisu. Hinnad on hinnangud, mitte pakkumised. Märge [HINNANG] tähistab inseneri hinnangut "
-      "või turuhinna suurusjärku, [KONTROLLIMATA] väidet, mida ei ole veel algallikast kinnitatud, ja [__] kohta, mis tuleb täita "
-      "enne dokumendi üleandmist.", sz=9, varv=HALL)
+    P("Dokument koondab kontseptsiooni, tehnilise analüüsi, elektrianalüüsi, õigusanalüüsi ja töötava näidise seisu. "
+      "Hinnad on hinnangud, mitte pakkumised. Märge [HINNANG] tähistab hinnangut või turuhinna suurusjärku, [KONTROLLIMATA] väidet, "
+      "mida ei ole veel algallikast kinnitatud, ja [__] kohta, mis tuleb täita enne dokumendi üleandmist.", sz=9, varv=HALL)
+    lehevahetus()
+    KAST("Tehniline, elektri- ja õigusanalüüs on koostatud tehisintellekti abil Margo Pädami juhtimisel; neid ei ole allkirjastanud "
+         "pädev elektriinsener ega advokaat. „Sõltumatu kontroll“ tähendab eraldi AI-ülevaatust, mitte kolmanda osapoole auditit. "
+         "Tarkvara turvaülevaatus on samuti sisemine (eraldi AI-ülevaatus); kolmanda osapoole läbistustesti ei ole tehtud.",
+         "Kuidas analüüsid on koostatud")
+    P("Kuidas seda dokumenti lugeda", sz=14, varv=SININE, bold=True, after=4)
+    T(["Lugeja", "Peatükid", "Miks"],
+      [["Klient", "1, 4, 9, 11", "mida süsteem teeb, moodulid, eelised ja puudused, mida klient võidab"],
+       ["Investor või partner", "1, 2, 7, 9, 11, 12", "probleem, kulud ja tasuvus, ausad piirangud, miks meie, tegevuskava"],
+       ["Paigaldaja", "6, lisa C", "lukud, evakuatsioon, toide, kaabeldus, kasutuselevõtu kontrollnimekiri"]],
+      laiused=[3.6, 3.6, 9.4], sz=9.5, esimene_bold=True)
+    P("Kogu dokumendis on eristatud **„näidises tehtud“** (töötav tarkvara 01.11.2026) ja **„tootmisetapis kavandatud“** "
+      "(veel tegemata). Kavandatud osa ei ole lubadus, vaid plaan.", sz=10)
     lehevahetus()
     P("Sisukord", sz=18, varv=SININE, bold=True, after=6)
     par = doc.add_paragraph()
@@ -398,25 +410,30 @@ def ptk1():
          "sündmuse ja vajadusel annab võrgureleele käsu (uks avaneb, automaat väljastab). Haldur lõpetab töösuhte **ühe nupuga** ja "
          "laeb kuu lõpus aruande raamatupidamisse.", "Lahendus")
     H3("Kasu kliendile")
-    B(["**Töösuhte lõpp ühe klõpsuga:** kõik uksed, autod, automaadid ja seadmed suletakse korraga; kaarte ja võtmeid ei pea tagasi nõudma.",
-       "**Kaarte pole:** ei ostu, kadumise ega väljastamise aega. Sisemisel uksel piisab võrgureleest (20–60 €), tööriistal kleebisest.",
-       "**Üks süsteem viie asemel:** läbipääs, tööriistad, autod, automaadid ja printerid ühes logis.",
-       "**Kuu lõpu aruanne:** ostud töötaja kaupa, sõidupäevik, läbipääsu- ja seadmelogi CSV-failina raamatupidamisse.",
-       "**Ohutus disainis:** evakuatsiooniuks avaneb seest alati ilma telefonita; tulekahju korral vabastab luku riistvara, mitte tarkvara."])
+    B(["**Töösuhte lõpp ühe klõpsuga:** kõik digivõtmega juhitud uksed, autod, automaadid ja seadmed suletakse korraga. Alles jäävad "
+       "mehaanilised võtmed ja kaardid (nt varuvõti, välisuks) tuleb endiselt tagasi nõuda.",
+       "**Vähem kaarte:** põhikandja on töötaja telefon. Töötajale, kes telefoni ei kasuta, on vaja alternatiivi (kaart, PIN või prinditud QR).",
+       "**Odavam siseuks:** lugejat pole vaja; relee ise maksab 20–60 €, kuid siseuks koos luku, toite, kaabelduse ja paigaldusega "
+       "≈ 550–700 € [HINNANG]. Tööriistal piisab kleebisest.",
+       "**Üks süsteem viie asemel:** läbipääs, tööriistad, autod, automaadid ja seadmed ühes logis.",
+       "**Kuu lõpu aruanne:** ostud töötaja kaupa, sõidupäevik, läbipääsu- ja seadmelogi CSV-failina raamatupidamisse (näidises tehtud; "
+       "töötaja nõusolek kinnipidamiseks tootmisetapis).",
+       "**Ohutus disainis:** kavandatud nii, et väljapääs ei sõltu telefonist, tarkvarast ega võrgust; tulekahju korral vabastab luku "
+       "riistvara. Nõuetekohase paigalduse tagavad paigaldaja ja hoone valdaja."], sz=9.5)
     H3("Kulu suurusjärk (näidisettevõte 50 töötajat, kontor + ladu) [HINNANG]")
-    T(["Kulu", "Suurusjärk", "Allikas"],
-      [["Ühekordne: seadmed + paigaldus (4 ust, kohv, snäkk, 3 printerit, 5 autot)", "≈ 8 800 €; Elektriinseneri töökindluse lisadega ≈ 9 460–9 540 €", "Ehitusinseneri BOM 6.b; Elektriinseneri p 5"],
-       ["Aastane ülalpidamine (litsents, hooldus, sisemine haldus)", "≈ 4 600–6 200 €/a", "Kontseptsioon p 5 + Ehitusinseneri hoolduskulu (vt ptk 7)"],
-       ["Investorinäidise demolaud", "≈ 2 500 €; lisadega ≈ 2 710 €", "BOM 6.a"]],
-      laiused=[6.2, 5.4, 5.0], sz=9)
-    P("Varasem kontseptsiooni hinnang 3 000–8 000 € oli alumises osas liiga madal, kui välisuks ja tuletõkkeuks vajavad uusi "
-      "sertifitseeritud komponente.", sz=9.5, varv=HALL)
+    T(["Kulu", "Suurusjärk", "Kus täpsemalt"],
+      [["Ühekordne: seadmed + paigaldus (4 ust, kohv, snäkk, 3 printerit, 5 autot)", "≈ 8 800 €; töökindluse lisadega ≈ 9 460–9 540 €", "ptk 7.1"],
+       ["Aastane ülalpidamine (litsents, hooldus, sisemine haldus)", "≈ 4 600–6 200 €/a", "ptk 7.2"],
+       ["Investorinäidise demolaud", "≈ 2 500 €; lisadega ≈ 2 710 €", "ptk 7.1"],
+       ["Tasuvus", "pilootandmeteta ei väideta; sõltub tööriistakadudest ning kaartide ja lukuvahetuse kulust", "ptk 7.3"]],
+      laiused=[6.2, 6.6, 3.8], sz=9)
     H3("Seis 01.11.2026")
-    B(["**Töötav tarkvaranäidis** (`digivoti`): kasutajad ja kutsed, uks (ka muutuva QR-iga), automaat koos ostuga, seade ja auto koos sõidupäevikuga, "
-       "töösuhte lõpp, kuuaruanne. **22 automaattesti läbivad**; sõltumatu turvakontroll leidis 4 viga, kõik parandatud ja testidega kaetud.",
-       "Tööriistade register (`qrwork`) on varem valmis ja töötab.",
-       "Tehniline lahendus, elektritehniline ülevaatus (v2) ja õiguslik raamistik on koostatud. Elektriosa sõltumatu kontroll on tehtud (v2: 9/10, rahul).",
-       "**Ei ole veel:** riistvara proov päris lukuga, pilootklient [__], tootmisküps sideviis (WebSocket/MQTT), lugeja-variant (B) tarkvaras."])
+    B(["**Näidises tehtud:** töötav tarkvara – kasutajad ja kutsed, uks (ka muutuva QR-iga), automaat koos ostuga, seade ja auto koos "
+       "sõidupäevikuga, töösuhte lõpp, kuuaruanne. **22 automaattesti läbivad.** Eraldi AI-turvaülevaatus leidis 4 viga, kõik parandatud "
+       "ja testidega kaetud; kolmanda osapoole läbistustesti ei ole tehtud.",
+       "Tööriistade register töötab. Tehniline, elektri- ja õigusanalüüs on koostatud (AI abil, vt lk 2).",
+       "**Tootmisetapis kavandatud (veel ei ole):** riistvara proov päris lukuga, pilootklient [__], tootmisküps sideviis (WebSocket/MQTT), "
+       "lugeja-režiim (B), kinnipidamise nõusolek rakenduses, automaatne andmete kustutamine."], sz=9.5)
 
 def ptk2():
     H1("2. Probleem ja võimalus")
@@ -440,7 +457,8 @@ def ptk2():
     H2("2.3 Sihtrühm")
     P("Sihtrühm on **20–250 töötajaga ettevõtted**, eelkõige ehitus- ja paigaldusettevõtted (tööriistad, objekti konteinerid, alltöövõtjad, "
       "tööautod). Kontseptsiooni järgi on Eestis ligi 160 000 majandusüksust, enamik alla 10 töötaja, ja 50–249 töötajaga ettevõtteid "
-      "umbes 1 150 (Statistikaamet) [KONTROLLIMATA: aasta ja arv kontrollida]. Segmendid ja tegevuskava on peatükis 12.")
+      "umbes 1 150 (Statistikaamet) [KONTROLLIMATA: aasta ja arv kontrollida]. 20–49 töötajaga ettevõtete arvu ega turu suurust eurodes "
+      "ei ole hinnatud [__]. Segmendid ja tegevuskava on peatükis 12.")
 
 def ptk3():
     H1("3. Kuidas süsteem töötab")
@@ -460,10 +478,10 @@ def ptk3():
         "Telefon näitab iga 30 s muutuvat QR-i (TOTP). Ukse juures QR-lugeja ja kontroller."],
        ["Riistvara objekti juures", "võrgurelee 20–60 €", "QR-lugeja 25–500 € + kontroller"],
        ["Interneti katkestus", "**ei tööta** (käsk tuleb serverist); varuks mehaaniline võti, PIN või kaart halduritele",
-        "töötab: kontroller kontrollib koodi kohaliku nimekirja järgi; telefon arvutab koodi ilma võrguta"],
+        "kavandatud: kontroller kontrollib koodi kohaliku nimekirja järgi; **teostatavus tõendamata** [HINNANG] – tavaline kontroller TOTP-d ei kontrolli ja Wiegand 26 bitti koodi ei mahuta; vaja oma püsivara (nt ESP32) või varuvariant kaart/PIN"],
        ["Õiguse äravõtt", "kohe", "offline ajal jõuab kontrollerisse ühenduse taastudes → nimekirja kehtivus lühike (nt 24 h) [HINNANG]"],
        ["Sobib", "sisemised uksed, automaadid, autod, tööriistad, arvutid", "välisuksed, ehitusobjekt, kus telefonil ei pruugi olla internetti"],
-       ["Näidises", "**tehtud** (staatiline ja muutuv QR)", "kavandatud (tehniline lahendus, BOM); tarkvaras veel mitte"]],
+       ["Näidises", "**tehtud** (staatiline ja muutuv QR)", "tootmisetapis kavandatud; tarkvaras ja riistvaras tegemata"]],
       laiused=[3.2, 6.7, 6.7], pealkiri="Režiimide võrdlus", esimene_bold=True)
     H2("3.3 Muutuv QR ja fotorünnak")
     P("Staatilisest kleebisest saab teha foto ja ust hiljem kaugelt avada (kui fotoga inimesel on õigus). Seepärast on uksel "
@@ -478,17 +496,17 @@ def ptk3():
     P("**Väljapääsuahelas ei ole ühtegi tarkvara, raadiot ega võrku.** Pilv ja kontroller annavad ainult *loa lukustada*. "
       "Evakuatsiooniteel avaneb uks seest mehaaniliselt (käepide või paanikapulk) või vabastab luku riistvaraline ahel: tulekahju-"
       "signalisatsiooni (ATS) vaherelee ja kahepooluseline roheline avariinupp katkestavad luku toite otse. Pilv ei saa vabastust "
-      "tühistada. Täpsem kirjeldus on peatükis 6.2.")
+      "tühistada. See on kavandatud põhimõte; nõuetekohase paigalduse tagavad paigaldaja ja hoone valdaja. Täpsem kirjeldus on peatükis 6.2.")
 
 def ptk4():
     H1("4. Moodulid")
     P("Moodulid kasutavad sama kasutajat, õigusi ja logi. Klient võib alustada ühest moodulist (nt uksed ja tööriistad) ja lisada teised hiljem.")
     T(["Moodul", "Mida teeb", "Riistvara", "Näidises"],
       [["Kasutajad ja rollid", "töötaja, haldur; plaanis külaline/alltöövõtja (ajaliselt piiratud link) ja raamatupidaja (ainult aruanded); õigused rühmade kaupa (nt Ladu, Kontor)", "–", "töötaja ja haldur tehtud"],
-       ["Uksed", "õigus + ajaaken (nt E–R 07–19), logi kes/mis/millal; muutuv QR; tulekahjusignaal vabastab riistvaras", "relee, lukk, toiteplokk; välisuksel lugeja", "tehtud (demolukk)"],
-       ["Automaadid", "QR → tootevalik telefonis → kinnitus → väljastus; summa kuu kinnipidamistesse", "snäkiautomaadil MDB cashless-liides; kohvimasinal liides, relee või ainult logi", "tehtud (demoautomaat)"],
+       ["Uksed", "õigus + ajaaken (nt E–R 07–19), logi kes/mis/millal; muutuv QR; tulekahjusignaal vabastab riistvaras", "relee, lukk, toiteplokk; välisuksel lugeja", "õigus, ajaaken, muutuv QR tehtud (demolukk); tulekahjusignaali liides ja lugeja (režiim B) tegemata"],
+       ["Automaadid", "QR → tootevalik telefonis → kinnitus → väljastus; summa kuu kinnipidamistesse", "snäkiautomaadil MDB cashless-liides; kohvimasinal liides, relee või ainult logi", "ost tehtud (demoautomaat); MDB-liides ja nõusolek tegemata"],
        ["Tööautod", "broneering, võtmine, odomeetri näit ja eesmärk → sõidupäevik", "võtmekapp elektrilukkudega; valikuliselt OBD-II/telemaatika", "kasutus + odomeeter tehtud; broneering ja võtmekapp mitte"],
-       ["Tööriistad ja inventar", "kelle käes, võtmine/tagastus, logi", "kleebis (~0,1 €)", "olemas (`qrwork`)"],
+       ["Tööriistad ja inventar", "kelle käes, võtmine/tagastus, logi", "kleebis (~0,1 €)", "olemas (qrwork)"],
        ["Arvuti ja printer", "kasutusaja logi; arvutil paroolivaba sisselogimine (Entra ID / FIDO2) või QR; printeril turvaprintimine", "tarkvara; printeri tootja lahendus või PaperCut-tüüpi tarkvara", "seadme kasutuse logi tehtud"],
        ["Aruanded ja liidesed", "kinnipidamised töötaja kaupa, ostud, sõidupäevik, läbipääsu- ja seadmelogi; kulud objekti/projekti kaupa", "–", "CSV tehtud; XLSX ja Meriti/Directo formaat mitte"]],
       laiused=[2.8, 6.4, 4.3, 3.1], pealkiri="Moodulid", sz=8.5, esimene_bold=True)
@@ -508,21 +526,24 @@ def ptk4():
     H2("4.3 Tööautod ja sõidupäevik")
     P("Auto või võtmekapi QR → broneering → võtmine → odomeetri näit ja eesmärk alguses ja lõpus. Näit ei saa olla väiksem eelmisest. "
       "Võtmekapp on metallkapp elektrilukustatud lahtritega (valmistoode 1 500–5 000 €, isetehtud materjal 450–600 € [HINNANG]). "
-      "Sõidupäevik on **tõend, et autot kasutati eranditult ettevõtluseks** – see on alus sisendkäibemaksu 100 % mahaarvamiseks. "
-      "Sõidupäevik **ei vähenda** sõiduauto erisoodustust: kui erakasutus on lubatud, tekib erisoodustus kogu ulatuses (ptk 8.3).")
+      "Näidises on kasutuse algus/lõpp, odomeeter ja eesmärk; broneering ja võtmekapp on tootmisetapis.")
+    P("Sisendkäibemaksu 100 % mahaarvamise alus on auto kasutamine **eranditult ettevõtluse tarbeks** (KMS § 30 lg 4 p 5). Sõidupäevik on "
+      "**üks tõend** selle kohta; MTA ootab praktikas päevikut [KONTROLLIMATA]. Täielikum tõend on päevik koos võtmekapiga (iga võtmevõtt "
+      "logitud); näidises sisestab odomeetri kasutaja ise. Sõidupäevik **ei vähenda** sõiduauto erisoodustust: kui erakasutus on lubatud, "
+      "tekib erisoodustus kogu ulatuses (ptk 8.3).")
     H2("4.4 Kasutaja ja halduri teekond")
-    J(os.path.join(PILDID, "skeem_teekond.png"), 16.4, "Teekond kutsest kuu lõpu aruandeni.")
+    J(os.path.join(PILDID, "skeem_teekond.png"), 16.4, "Sihtteekond kutsest kuu lõpu aruandeni. Näidises on sammud 1–5 ja kuuaruande CSV; kuu lõpu kinnitus on tootmisetapis.")
     T(["Samm", "Kasutaja (töötaja)", "Haldur (kontori- või personalijuht)"],
       [["Algus", "saab kutselingi/QR-i (kehtib 7 päeva, ühekordne), valib PIN-i või parooli (≥ 6 märki); telefon jääb sisse logituks", "loob kasutaja (nimi, telefon, rühmad), prindib objektide QR-sildid"],
        ["Igapäev", "skännib uksel, automaadil, autol või tööriistal; avalehel näeb oma kuu ostude summat, pooleli kasutusi ja ligipääse", "näeb logi reaalajas, muudab õigusi ja ajaaknaid"],
        ["Kadunud telefon", "saab uue kutse", "saadab uue kutse; vanad sessioonid muutuvad kohe kehtetuks"],
-       ["Kuu lõpp", "kinnitab rakenduses kuu ostude summa kinnipidamise (või maksab arve)", "laeb alla kuuaruande CSV-na ja annab raamatupidajale"],
+       ["Kuu lõpp", "tootmisetapis: kinnitab rakenduses kuu ostude summa kinnipidamise või maksab arve (näidises puudub)", "laeb alla kuuaruande CSV-na ja annab raamatupidajale (näidises tehtud)"],
        ["Töösuhte lõpp", "telefon logitakse välja, sisse ei saa; ükski objekt ei avane", "vajutab „Töösuhe lõppes“: kasutaja peatatakse, sessioonid ja kutsed tühistatakse, ootel releekäsud tühistatakse, pooleli kasutused lõpetatakse"]],
       laiused=[2.6, 7.0, 7.0], pealkiri="Kasutaja ja halduri ülesanded", sz=8.5, esimene_bold=True)
 
 def ptk5():
     H1("5. Töötav näidis")
-    P("Näidis (`qrwork/digivoti`) on eraldi projekt: Cloudflare Worker ja Durable Object, välist koodi ega npm-sõltuvusi ei ole "
+    P("Näidis (qrwork/digivoti) on eraldi projekt: Cloudflare Worker ja Durable Object, välist koodi ega npm-sõltuvusi ei ole "
       "(QR-generaator ja jsQR on kopeeritud koos litsentsimärkega, MIT ja Apache-2.0). Riistvara asemel on demolukk ja demoautomaat "
       "veebilehed, mis kasutavad **sama releeliidest** nagu päris Shelly/ESP32.")
     H2("5.1 Mida näidis teeb")
@@ -530,7 +551,8 @@ def ptk5():
        "**Objektid:** uks, automaat, seade, auto; kood, QR, lubatud rühmad, ajaaken.",
        "**Uks:** skänn → õigus → logi → releele ühekordne käsk; relee küsib käske seadmetokeniga.",
        "**Muutuv QR:** ukse ekraan näitab iga 30 s uut koodi; staatiline kood sellist ust ei ava.",
-       "**Automaat:** tootevalik → kinnitus → ost (hind sentides, fikseeritakse ostuhetkel) → väljastus; ebaõnnestunud väljastus tühistab ostu.",
+       "**Automaat:** tootevalik → kinnitus → ost (hind sentides, fikseeritakse ostuhetkel) → väljastus; ebaõnnestunud väljastus tühistab ostu. "
+       "**Nõusoleku küsimist näidises veel pole:** kuuaruanne arvutab kinnipidamise summa ilma nõusolekuta; demoandmetega päris kinnipidamist ei tehta.",
        "**Seade ja auto:** „Alusta kasutust“ / „Lõpeta“; autol odomeeter ja eesmärk.",
        "**Töösuhte lõpp:** üks nupp sulgeb kõik.",
        "**Kuuaruanne:** kinnipidamised, ostud, sõidupäevik, läbipääsulogi, seadmete kasutus – CSV Exceli jaoks (valemi süstimise kaitsega).",
@@ -554,25 +576,27 @@ def ptk5():
        ["Töösuhte lõpp", "peatatud kasutaja ei ava midagi, vanad sessioonid kehtetud"],
        ["Ost ja aruanne", "summa sentides, kinnipidamine töötaja kaupa, CSV; seade ja auto, odomeeter, sõidupäevik"],
        ["Turvalisus", "CSRF-päis, halduse token, kutse ühekordsus, CSP nonce, CSV valemikaitse, XSS, IDOR, hinna võltsimine, võltsitud IP-räsi"],
-       ["Sõltumatu kontrolli parandused (4)", "samaaegsed sisselogimised ei pääse piirangust mööda; kutse ühekordne ka samaaegsel kasutusel; uus kutse tühistab vana telefoni sessiooni kohe; väljastamata ost tühistatakse"]],
-      laiused=[4.4, 12.2], pealkiri="Automaattestid (22 testi, kõik läbivad 01.11.2026)", sz=8.5, esimene_bold=True)
+       ["Turvaülevaatuse parandused (4)", "samaaegsed sisselogimised ei pääse piirangust mööda; kutse ühekordne ka samaaegsel kasutusel; uus kutse tühistab vana telefoni sessiooni kohe; väljastamata ost tühistatakse"]],
+      laiused=[4.4, 12.2], pealkiri="Automaattestid (22 testi, kõik läbivad 01.11.2026; turvaülevaatus = eraldi AI-ülevaatus, mitte kolmanda osapoole test)", sz=8.5, esimene_bold=True)
     P("Turvapõhimõtted: välist koodi ei laeta (CSP nonce'iga), küpsis HttpOnly + Secure + SameSite, paroolid PBKDF2-SHA256, sessiooni-, "
       "kutse- ja seadmetokenid hoitakse ainult räsina, IP ainult soolatud räsina, vigaste katsete piirangud.")
     H2("5.4 Mis on veel tegemata või kontrollimata")
-    B(["**Riistvara:** Shelly skript ja päris relee/lukk on proovimata. Elektriinseneri järgi vajab Shelly 1 (ainult NO-kontakt) magnetluku "
+    B(["**Riistvara:** Shelly skript ja päris relee/lukk on proovimata. Elektrianalüüsi järgi vajab Shelly 1 (ainult NO-kontakt) magnetluku "
        "puhul vahereleed (ptk 6.2).",
        "**Sideviis:** relee küsib käske iga 1 s, mis teeb ~86 400 päringut ööpäevas seadme kohta; Cloudflare'i tasuta plaani piir (100 000/päev) "
        "kannab ainult üht seadet. Tootmises WebSocket või MQTT [KONTROLLIMATA: hind ja piirangud].",
-       "**Avaldamine:** `wrangler dev` ja `deploy` ei ole proovitud (testitud Node'i testide ja kohaliku serveriga).",
+       "**Avaldamine:** wrangler dev ja deploy ei ole proovitud (testitud Node'i testide ja kohaliku serveriga).",
        "**Puuduvad funktsioonid:** kasutaja ise parooli taastus, külalise ajutine link, raamatupidaja roll, broneeringud, MDB-liides, XLSX ja "
        "Meriti/Directo formaat, mitme firma tugi, tulekahjusignaali ühendus, režiim B (lugeja), kuu lõpu kinnituse vorm, arestimisvaba osa arvutus.",
        "**Teadaolevad väiksemad puudused** (tootmisetapi töö): muutuv QR ei ole ühekordne; relee ja ukseekraan kasutavad sama seadmetokenit; "
        "vigaste katsete loendurid on mälus; sama IP taga olev ründaja võib halduri või relee 15 min lukustada; ajaaken üle kesköö ei ole toetatud; "
-       "logid kasvavad piiramatult; seadme „väljastatud“ kinnitust automaadilt ei küsita; seadme „viimati nähtud“ (heartbeat) puudub."])
+       "logid kasvavad piiramatult; seadme „väljastatud“ kinnitust automaadilt ei küsita; seadme „viimati nähtud“ (heartbeat) puudub.",
+       "**Skaleeruvus testimata:** näidis loeb sessioonid tervikuna ja logid kasvavad piiramatult; sadade töötajate ja seadmetega ei ole "
+       "proovitud. Koormustest on tootmisetapi töö."])
 
 def ptk6():
     H1("6. Tehniline ülesehitus")
-    P("Peatükk koondab Ehitusinseneri tehnilise lahenduse ja Elektriinseneri ülevaatuse. Kus Elektriinsener parandas Ehitusinseneri "
+    P("Peatükk koondab tehnilise analüüsi ja elektrianalüüsi. Kus elektrianalüüs parandas tehnilise analüüsi "
       "väidet, on siin parandatud versioon. Standardite olek on kontrollitud evs.ee-st 01.11.2026, kuid **standardite teksti ei ole loetud**; "
       "standardi sisu kohta käivad väited on [KONTROLLIMATA].", sz=10)
     H2("6.1 Arhitektuur ja side")
@@ -585,8 +609,9 @@ def ptk6():
        ["Kontroller → lukk", "potentsiaalivaba kontakt", "lukk oma toiteplokist; relee ei toida lukku läbi oma elektroonika"],
        ["Automaat", "MDB/ICP 4.2–4.3, cashless-seade", "automaadil peab olema MDB [KONTROLLIMATA käskude nimed]"]],
       laiused=[3.4, 6.0, 7.2], pealkiri="Sideprotokollid", sz=8.5, esimene_bold=True)
-    P("Käsud on allkirjastatud, aeguvad (nt 10–20 s) ja on ühekordsed; IoT-seadmed on eraldi VLAN-is, kohalik HTTP-liides parooliga "
-      "või välja lülitatud, tootja pilv ja Bluetooth välja [HINNANG].")
+    P("**Näidises:** käsk on ühekordne, aegub 20 s ja relee autentib seadmetokeniga. **Tootmise eesmärk:** käsud lisaks allkirjastatud, "
+      "relee ja ukseekraan eraldi tokenitega, IoT-seadmed eraldi VLAN-is, kohalik HTTP-liides parooliga või välja lülitatud, tootja pilv ja "
+      "Bluetooth välja [HINNANG].")
     H2("6.2 Lukud ja evakuatsioon")
     T(["Lukk", "Toite kadumisel", "Sobib", "Märkus"],
       [["Elektriline vastuplaat fail-secure", "lukus; seest avatakse mehaaniliselt", "sise- ja välisuksed, kus seest avamine on mehaaniline", "Shelly NO-kontakt avab otse (pinge all = lahti)"],
@@ -607,8 +632,8 @@ def ptk6():
       "NC-kontakt, **sõltub ATS-i keskseadme väljundi tüübist** (tavaolekus pinge all olev väljund või häirel pingestuv järelevalvega "
       "väljund). Ühte kindlat skeemi siin ei anta: variandi valib ATS-ettevõtja, see märgitakse ühendusskeemile ja katsetatakse "
       "kasutuselevõtul (häire, lõhe, lühis). Kui valitud väljund kaabli katkemisel lukku ei vabasta, peab keskseade katkemise kohe "
-      "rikkena näitama ja väljapääs seest olema mehaaniline. Vaherelee paigaldatakse ukse lähedale. (Ehitusinseneri skeem andis ühe "
-      "kontaktitüübi; Elektriinseneri v2 ja sõltumatu kontroll näitasid, et õige tüüp sõltub väljundist.) Sama ahelasse jadamisi:")
+      "rikkena näitama ja väljapääs seest olema mehaaniline. Vaherelee paigaldatakse ukse lähedale. (Tehnilise analüüsi skeem andis ühe "
+      "kontaktitüübi; elektrianalüüsi v2 ja selle AI-ülevaatus näitasid, et õige tüüp sõltub väljundist.) Sama ahelasse jadamisi:")
     B(["**roheline avariinupp, 2-pooluseline:** üks poolus katkestab luku toite, teine annab kontrollerile häiresisendi; kui on vaja katkestada "
        "mõlemad toitejuhtmed ja anda ka häire, on vaja 3 kontakti [HINNANG];",
        "**digivõtme relee** ainult kui „luba lukustada“; kontroller loeb ATS-i ja avariinupu olekut ainult logiks; pilv ei saa vabastust tühistada;",
@@ -618,8 +643,8 @@ def ptk6():
     KAST("Shelly 1 seeria väljund on ainult NO-kontakt. Käsk „sulge kontakt 5 s“ avab fail-secure vastuplaadi, aga **magnetluku puhul "
          "tähendab sama käsk „lukusta 5 s“**. Magnetluku ahelas on seepärast alati vaherelee (CO-kontaktiga, pistikupesas vahetatav) ja "
          "ATS/avariinupp jadamisi. Shelly 1 + magnetlukk ilma vahereleeta ja riistvaralise vabastuseta **ei sobi evakuatsiooniteele**. "
-         "Shelly ei lülita lukuvoolu otse, kui lukk on magnetlukk, voolu on üle 0,5 A või uks on evakuatsiooniteel [HINNANG].",
-         "Elektriinseneri parandus: relee ja magnetlukk")
+         "Tootmislahenduses lülitab Shelly ainult vaherelee mähist; lukku otse lülitab ta ainult demolaual fail-secure vastuplaadi puhul [HINNANG].",
+         "Elektrianalüüsi parandus: relee ja magnetlukk")
     H3("Tuletõkkeuks")
     B(["Tuletõkkeukse klass (nt EI 30, S_a, S_200) kehtib ainult katsetatud konfiguratsioonis (EVS-EN 13501-2:2023, EVS-EN 16034:2014). "
        "Uue luku freesimine või puurimine võib klassi kaotada.",
@@ -629,11 +654,11 @@ def ptk6():
        "lisaks jadamisi (tema avanemine saab ukse ainult sulgeda – ohutu suund)."])
     H2("6.3 Toide ja aku")
     B(["**Pinge:** 12 V DC väikestel ustel ja demol, **24 V DC** pikkadel kaablitel ja mootorlukkudel. 24 V juures väheneb sama võimsuse korral "
-       "pingelang voltides poole võrra ja protsendina neljandikuni (Elektriinseneri täpsustus).",
+       "pingelang voltides poole võrra ja protsendina neljandikuni (elektrianalüüsi täpsustus).",
        "**Toiteplokk akuga** (13,8 V või 27,6 V) võrgu ja aku rikke väljunditega, sügavtühjenemise kaitsega, vajadusel temperatuurikompensatsiooniga "
        "(EVS-EN 50131-6 analoogia, tüüp A) [KONTROLLIMATA sisu].",
        "**Luku pingevahemik:** akuga toiteploki pinge kõigub ~10,5 V (aku tühjenemise lõpp) kuni 13,8 V (ootelaadimine). Vali lukk, mille lubatud "
-       "vahemik katab selle, või 24 V lukk, või stabiliseeritud DC/DC. (Ehitusinseneri arvutuses ületas 13,8 V toitel lukk 13 V ülapiiri.)",
+       "vahemik katab selle, või 24 V lukk, või stabiliseeritud DC/DC. (Tehnilise analüüsi arvutuses ületas 13,8 V toitel lukk 13 V ülapiiri.)",
        "**Temperatuurikompensatsioon ja lukk:** külmas tõstab kompensatsiooniga laadija siini pinge ~14,5 V-ni. See ei tohi jõuda "
        "lukule üle luku lubatud piiri: **lukk stabiliseeritud toitelt** (DC/DC) või lukk laia vahemikuga (10,5…14,6 V), või toiteplokk, mille "
        "kompensatsioon toimib ainult akuharus. Kütetud kontoris kompensatsiooni pole vaja; küsimus on konteineris.",
@@ -647,7 +672,8 @@ def ptk6():
        ["Ehituskonteiner −25 °C (k = 0,48)", "0,65 A", "26 Ah", "19,2 h; 72 h nõuab ~100 Ah"]],
       laiused=[5.4, 2.6, 2.4, 6.2], pealkiri="Aku varuaeg t = C·k/I, k = 0,8 (külmas 0,48) [HINNANG]", sz=9)
     P("**UPS võrguseadmetele:** 650 VA UPS kestab tavaliselt 40–90 min [KONTROLLIMATA, tootja], lukuaku aga 14–24 h. Kui ruuter kustub enne lukku, "
-      "ei tööta režiim A. Lahendus: 12/24 V DC-toitega ruuter ja kommutaator samast akutoiteplokist (DC-UPS).")
+      "ei tööta režiim A. Lahendus: eraldi DC-UPS võrguseadmetele või ühine aku, mis arvestab ka ruuteri ja kommutaatori voolu – siis on 24 h "
+      "jaoks vaja ≈ 54–69 Ah [HINNANG]. (28,5 Ah arvutus kehtib ainult lukkude, lugejate ja kontrolleri kohta.)")
     H2("6.4 Kaabeldus ja pingelang")
     P("Pingelang ΔU = 2·L·I·ρ/A (ρ = 0,0225 Ω·mm²/m). Kriteerium on luku lubatud pingevahemik **halvimas olekus** (aku tühjenemise lõpp ~10,5 V), "
       "mitte 230 V paigaldise 3–5 % piir.")
@@ -656,7 +682,7 @@ def ptk6():
        ["Magnetlukk 0,5 A, 0,22 mm² (häirekaabel), 20 m", "2,05 V (17 %)", "9,95 V — **häirekaabli soont ei kasutata luku toiteks**"],
        ["Vastuplaat 1,3 A, 1,5 mm², 20 m, aku lõpp 10,5 V", "0,78 V", "9,72 V — alla 11 V"],
        ["Sama 24 V lukuga 0,65 A", "0,39 V (1,6 %)", "23,6 V"]],
-      laiused=[7.4, 3.6, 5.6], pealkiri="Pingelang (Elektriinseneri arvutus E1)", sz=9)
+      laiused=[7.4, 3.6, 5.6], pealkiri="Pingelang (elektrianalüüs, arvutus E1)", sz=9)
     B(["**Üle 20 m või üle 1 A → 24 V lukk või toiteplokk ukse juurde.**",
        "Luku toide LiYY 2×1,5 või 4×1,0; signaalid LiYY 6×0,22; OSDP keerdpaar 120 Ω; Wiegand ekraanitud LiYCY [HINNANG].",
        "**Iga luku ja lugeja haru eraldi kaitse** (T1A…T2A) toiteploki juures ja **aku kaitse aku klemmi juures**.",
@@ -671,12 +697,14 @@ def ptk6():
        ["Võrk", "välisuksel kaabel/PoE, siseustel Wi-Fi; kahe WAN-iga ruuter (kaabel + 4G)"],
        ["Seire", "uksekontakt, luku olekuandur, voolumõõtmine releel, aku ja toiteploki rikkeväljundid kontrollerisse"],
        ["Häirekindlus", "tööstuslikul objektil tööstuskeskkonna EMÜ-ga seadmed (EVS-EN IEC 61000-6-2); Shelly on olme-/kontoriseade"]],
-      laiused=[3.4, 13.2], pealkiri="Töökindluse meetmed (Elektriinsener)", sz=8.5, esimene_bold=True)
+      laiused=[3.4, 13.2], pealkiri="Töökindluse meetmed (elektrianalüüs)", sz=8.5, esimene_bold=True)
     H2("6.6 Offline-töö")
-    P("Režiim A vajab võrku (otsus tehakse pilves). Režiim B kontrollib koodi kontrolleris kohaliku, lühikese kehtivusega nimekirja järgi ja "
+    P("Režiim A vajab võrku (otsus tehakse pilves). Režiim B on **kavandatud** nii, et kontroller kontrollib koodi kohaliku, lühikese kehtivusega nimekirja järgi ja "
       "puhverdab sündmused (≥ 1 000) hiljem saatmiseks; kellaaeg NTP + RTC, sest muutuv kood vajab kella täpsust ± 30 s. Seepärast soovitus: "
       "**välisuksel ja ehitusobjektil režiim B, siseustel režiim A** koos muutuva QR-iga; haldurile mehaaniline varuvõti. "
-      "Lisavõimalus on kohapealne edge-koopia (Raspberry Pi vms: kohalik nimekiri, logipuhver) 100–250 €/objekt [HINNANG].")
+      "Lisavõimalus on kohapealne edge-koopia (Raspberry Pi vms: kohalik nimekiri, logipuhver) 100–250 €/objekt [HINNANG]. "
+      "**Teostatavus on tõendamata** [HINNANG]: tavaline läbipääsukontroller muutuvat koodi ei kontrolli ja Wiegand 26 bitti seda ei mahuta, "
+      "seega on vaja oma püsivara (nt ESP32) või varuvariandina kaart/PIN.")
     H2("6.7 Ehitusobjekt")
     B(["Lugeja väljas vähemalt IP65, karp IP66, konteineri sees IP54; vandalismikindel kate IK10 [KONTROLLIMATA: EN 62262 olek].",
        "**Külm:** Shelly 1 Gen4 töövahemik −20…+40 °C ei sobi kütmata konteinerisse (ka suvel võib karbis olla üle +40 °C); tööstusruuter "
@@ -698,26 +726,28 @@ def ptk6():
        ["Püsivara, sertifikaadid, võtmed", "kord kuus kontroll, kriitiline uuendus kohe; võtmete roteerimine kord aastas"],
        ["Offline-režiimi test", "kord poolaastas"],
        ["SPD näidikud, klemmid, kondensaat, karbi küte", "kord kvartalis ja pärast äikest"]],
-      laiused=[9.0, 7.6], pealkiri="Hooldusgraafik (Ehitus- ja Elektriinsener koos)", sz=8.5)
-    KAST("Elektriosa sõltumatu kontroll tehtud 01.11.2026 (`ELEKTRI_KONTROLL_digivoti.md`): v0.1 hinne 7/10, Elektriinseneri v2 "
-         "pärast parandusi 9/10, otsus „rahul“. Selles peatükis on arvestatud v2 järeldused (ATS-vaherelee põhimõte, luku pingevahemik "
-         "külmas, aku ~28,5 Ah ja toiteplokk ≥ 6 A). Üks väike leid jäi: kasutuselevõtu protokollis ei tohi oodata „lukk vaba lõhel“ "
-         "variandi puhul, kus lõhe lukku ei vabasta. Enne paigaldusjuhendit tuleb see parandada.", "Elektriosa sõltumatu kontroll")
+      laiused=[9.0, 7.6], pealkiri="Hooldusgraafik (tehniline ja elektrianalüüs koos)", sz=8.5)
+    KAST("Elektrianalüüsi eraldi AI-ülevaatus (mitte pädeva elektriinseneri allkiri): v0.1 hinne 7/10, v2 pärast parandusi 9/10. "
+         "Selles peatükis on arvestatud v2 järeldused (ATS-vaherelee põhimõte, luku pingevahemik külmas, aku ~28,5 Ah ja toiteplokk ≥ 6 A). "
+         "Ülevaatuse väike leid kasutuselevõtu protokolli kohta (lõhe ATS-liinil ei vabasta lukku igas variandis) on lisas C arvestatud. "
+         "Enne paigaldusjuhendit vaatab lahenduse üle ja kinnitab pädev elektriinsener [__].", "Elektrianalüüsi staatus")
 
 def ptk7():
     H1("7. Seadmed ja kulud")
     P("Kõik summad on [HINNANG]: käibemaksuga turuhinna suurusjärk (kuulutused ja müüjalehed 11.2026), paigaldustöö 45 €/h; mitte pakkumised. "
       "Tootjanimed on näited, mitte soovitused.", sz=10)
     H2("7.1 Kolm konfiguratsiooni")
-    T(["Konfiguratsioon", "Seadmed €", "Töö h", "Töö €", "Kokku € (Ehitusinsener)", "Elektriinseneri lisad €", "Kokku koos lisadega €"],
+    P("Varasem kontseptsiooni hinnang 3 000–8 000 € oli alumises osas liiga madal, kui välisuks ja tuletõkkeuks vajavad uusi "
+      "sertifitseeritud komponente.", sz=10)
+    T(["Konfiguratsioon", "Seadmed €", "Töö h", "Töö €", "Kokku € (tehniline analüüs)", "Elektrianalüüsi lisad €", "Kokku koos lisadega €"],
       [["a) Investorinäidis (demolaud)", "1 628", "20", "900", "2 528", "≈ +180", "≈ 2 710"],
        ["b) Kontor + ladu, 50 töötajat", "5 908", "64", "2 880", "8 788", "≈ +670…750", "≈ 9 460–9 540"],
        ["c) Ehitusobjekt (2 konteinerit, tööriistakapp, värav)", "3 409", "31", "1 395", "4 804", "≈ +790…840", "≈ 5 590–5 640"]],
       laiused=[4.4, 1.8, 1.3, 1.6, 2.6, 2.4, 2.5], pealkiri="Ühekordne kulu kolmele konfiguratsioonile [HINNANG]", sz=8.5, esimene_bold=True)
     P("Konfiguratsioon b: välisuks (režiim B, mootorlukk), laouks evakuatsiooniteel (režiim B, EN 179 käepide + fail-secure vastuplaat, "
       "võimalik tuletõkkeuks), 2 siseust (režiim A, muutuv QR, vastuplaat), snäkiautomaadi MDB-liides, kohvimasina liides, 3 printeri "
-      "QR-vabastus, võtmekapp 5 autole. Isetehtud võtmekapiga (≈ 550 €) ≈ 7 840 €; kui olemasolev mootorlukk ja EN 179 käepide sobivad, ≈ 7 170 € "
-      "(Ehitusinseneri hinnangud ilma Elektriinseneri lisadeta).")
+      "QR-vabastus, võtmekapp 5 autole. Isetehtud võtmekapiga (≈ 550 €) ≈ 7 840 €; kui välisuksel on juba ühilduv mootorlukk ja laouksel EN 179 sulus (ei osteta uut), ≈ 7 170 € "
+      "(tehnilise analüüsi hinnangud ilma elektrianalüüsi lisadeta).")
     T(["Rühm", "Peamised read", "≈ €"],
       [["Uksed ja lukud", "2-ukse OSDP-kontroller, 2 välislugejat IP65, mootorlukk, tuletõkkeukse vastuplaat, 2 siseukse vastuplaati, EN 179 käepide, 2 releed, 2 muutuva QR-i ekraani", "1 880"],
        ["Toide ja ohutus", "2 toiteplokki akuga, akud, väljumis- ja avariinupud, uksekontaktid, ATS-liidese releed + ATS-ettevõtja töö", "848"],
@@ -727,12 +757,14 @@ def ptk7():
        ["**Seadmed kokku**", "", "**5 908**"],
        ["Paigaldustöö", "4 ust × 7 h, ATS-liides 6 h, MDB 4 h, kohv 3 h, printerid 4 h, võtmekapp 6 h, võrk 3 h, kasutuselevõtt ja koolitus 10 h = 64 h", "2 880"],
        ["**Kokku (b)**", "", "**8 788**"]],
-      laiused=[3.6, 10.6, 2.4], pealkiri="Konfiguratsiooni b kokkuvõte (Ehitusinseneri BOM 6.b, ridade rühmad)", sz=8.5)
-    H3("Elektriinseneri lisad (olulisemad)")
+      laiused=[3.6, 10.6, 2.4], pealkiri="Konfiguratsiooni b kokkuvõte (tehnilise analüüsi BOM 6.b, ridade rühmad)", sz=8.5)
+    P("**Režiim B arendus:** BOM-is on lugeja ja kontroller, kuid muutuva koodi kohalik kontroll vajab oma püsivara arendust (hind [__], "
+      "teostatavus tõendamata) või varuvariandina kaarti/PIN-i.", sz=10)
+    H3("Elektrianalüüsi lisad (olulisemad)")
     B(["vaherelee pistikupesaga (CO-kontakt) + diood/varistor igale lukule;",
        "DC/DC 9–36 V → 12 V elektroonikale;",
        "kontoris aku 2 × 17 Ah → 2 × 33 Ah (≥ 28,5 Ah ploki kohta, 24 h varuaeg) ja toiteplokk 5 A → ≥ 6 A; demolaual toiteplokk 3 A → 5 A;",
-       "UPS asemel 12/24 V DC-toitega ruuter/kommutaator akutoiteplokil;",
+       "UPS asemel 12/24 V DC-toitega ruuter/kommutaator akutoiteplokil (siis aku ≈ 54–69 Ah) või eraldi DC-UPS;",
        "harukaitsmed ja aku kaitse; ehitusobjektil liigpingekaitse, temperatuurikompensatsiooniga toiteplokk (lukk stabiliseeritud toitelt), temperatuuri- ja niiskusandur;",
        "voolumõõtmisega relee, luku olekuandur, mõõtmised ja protokoll kasutuselevõtul."])
     P("Kui raha on vähe, on kõige olulisemad: vaherelee, DC/DC, aku, kaitsmed ja konteineril liigpingekaitse.")
@@ -742,18 +774,35 @@ def ptk7():
        ["Asendused (akud, lukud, ~10 % riistvarast)", "100 €", "590 €", "590 €"],
        ["Side (SIM)", "0 €", "0 € (kliendi võrk)", "60 €"],
        ["**Riistvara hooldus kokku**", "**≈ 280 €**", "**≈ 1 300 €**", "**≈ 1 370 €**"]],
-      laiused=[6.2, 3.2, 3.6, 3.6], pealkiri="Riistvara hooldus aastas (Ehitusinsener) [HINNANG]", sz=9)
+      laiused=[6.2, 3.2, 3.6, 3.6], pealkiri="Riistvara hooldus aastas (tehniline analüüs) [HINNANG]", sz=9)
     T(["Rida (konfiguratsioon b, 50 töötajat, 4 ust)", "€/a", "Allikas"],
       [["Tarkvara litsents (SaaS), nt 3 €/kasutaja/kuu + 5 €/uks/kuu", "≈ 2 000", "kontseptsioon p 5 (näidishind)"],
        ["Pilv, side, teavitused", "0–300 (sees litsentsis)", "kontseptsioon p 5"],
-       ["Riistvara hooldus partneri poolt", "≈ 1 300", "Ehitusinsener p 7"],
+       ["Riistvara hooldus partneri poolt", "≈ 1 300", "tehniline analüüs p 7"],
        ["Sisemine haldus (kontorijuht 1–2 h/näd, ~25 €/h)", "1 300–2 600", "kontseptsioon p 5"],
-       ["**Kokku**", "**≈ 4 600–6 200 €/a (≈ 90–125 €/töötaja)**", "liidetud selles dokumendis"]],
+       ["**Kokku**", "**≈ 4 600–6 200 €/a (≈ 90–125 €/töötaja)**", "liidetud selles dokumendis"],
+       ["Lisaks võimalik: printerite QR-vabastuse litsents", "aastatasu [__]", "tehniline analüüs, BOM 6.b"],
+       ["Lisaks: Cloudflare'i tasuline plaan tootmises (tasuta plaan kannab ühe pollitava seadme)", "nt 5 $/kuu [KONTROLLIMATA]", "kontseptsioon p 3, näidise README"]],
       laiused=[8.0, 4.6, 4.0], pealkiri="Aastane ülalpidamine kokku [HINNANG]", sz=9)
     P("Kontseptsiooni hinnang 3 500–5 500 €/a eeldas riistvara hoolduseks 300–700 €, mis kehtib, kui tööd teeb kliendi haldur; partneri "
       "hooldusena lisandub töö. Kokkuhoiu poolel: kaartide ost ja kadumine, kohvikassa ja käsitsi nimekirjad (raamatupidaja 2–4 h kuus), "
       "automaatne sõidupäevik, väiksemad tööriistakaod. Kokkuhoidu ei ole pilootkliendi andmetega mõõdetud [__].")
-    H2("7.3 Kes mida teeb")
+    H2("7.3 Tasuvus")
+    P("Tasuvust ei saa ilma pilootandmeteta väita. Allpool on stsenaariumid [HINNANG], mis näitavad, millest tasuvus sõltub. "
+      "Aastakulu (konfiguratsioon b): ühekordne ≈ 9 500 € jaotatuna 5 aastale [HINNANG eluiga] ≈ 1 900 €/a + ülalpidamine 4 600–6 200 €/a "
+      "= **≈ 6 500–8 100 €/a**. Sinna kuulub ka sisemine haldus (1 300–2 600 €/a), mis osaliselt asendab praegust võtmete ja nimekirjade "
+      "haldust – seda osa ei ole mõõdetud.")
+    T(["Kokkuhoiu allikas", "Madal", "Keskmine", "Kõrge", "Alus"],
+      [["Raamatupidaja aeg (kohvikassa, nimekirjad) 2–4 h/kuu × ~25 €/h", "600 €", "900 €", "1 200 €", "kontseptsioon p 5; tunnihind kontseptsiooni sisemise töö järgi"],
+       ["Ära hoitud tööriistakaod (mõõteseade 500–3 000 €/tk)", "1 × 500 €", "3 × 1 500 €", "5 × 3 000 €", "stsenaarium [HINNANG]"],
+       ["Kaartide ost ja kadumine, lukuvahetus kaotatud võtme tõttu", "[__]", "[__]", "[__]", "kliendi andmed puuduvad"],
+       ["**Kokku (ilma kaartide ja lukkudeta)**", "**≈ 1 100 €/a**", "**≈ 5 400 €/a**", "**≈ 16 200 €/a**", ""],
+       ["Võrdlus aastakuluga ≈ 6 500–8 100 €/a", "ei tasu", "ei tasu või piiri peal", "tasub", ""]],
+      laiused=[5.4, 2.0, 2.3, 2.3, 4.6], pealkiri="Tasuvuse stsenaariumid, konfiguratsioon b [HINNANG]", sz=8.5, esimene_bold=True)
+    P("Järeldus: tasuvus sõltub peamiselt **tööriistakadudest** ning **kaartide ja lukuvahetuse kulust**; arvestamata on ka alternatiivi kulu "
+      "(nt kaardisüsteem, mida klient muidu ostaks) ja turvaväärtus. Pilootkliendi andmetega [__] arvutatakse tasuvus uuesti. Kuni selleni "
+      "ei esitata kliendile tasuvusväidet.")
+    H2("7.4 Kes mida teeb")
     T(["Tase", "Kes", "Mida teeb"],
       [["Platvorm", "tarnija [ettevõtte nimi]", "server, uuendused, turvalisus, varukoopiad, tugi; volitatud töötleja leping"],
        ["Kliendi haldur", "kontori- või personalijuht", "kasutajad, rühmad, õigused, töösuhte lõpp; igakuine avariinupu ja ukse kontroll"],
@@ -766,49 +815,51 @@ def ptk7():
 
 def ptk8():
     H1("8. Õiguslik raamistik")
-    P("Peatükk põhineb Nõuniku analüüsil (seis 01.11.2026, Riigi Teataja kehtivad tervikteksted; RT viited lisas D). GDPR-i artiklid ja "
+    P("Peatükk põhineb õigusanalüüsil (seis 01.11.2026, Riigi Teataja kehtivad tervikteksted; RT viited lisas D). GDPR-i artiklid ja "
       "Andmekaitse Inspektsiooni juhendid ei olnud kontrollimisel kättesaadavad ja on märgitud [KONTROLLIMATA]. **See ei ole õigusabi "
       "advokaadi tähenduses**; lepingupõhjad ja müügimaterjal vaadatakse enne kasutamist juristiga üle.", sz=10)
     H2("8.1 Kokkuvõte")
-    T(["Nõue", "Kohustuslik?", "Mida toode teeb", "Risk, kui ei tee"],
-      [["Evakuatsiooniuks avaneb alati ilma telefoni ja serverita (SiM m 17 § 48 lg 1 p 3, § 55 lg 2)", "**Jah**, ka olemasolevas hoones", "mehaaniline väljapääs või riistvaraline vabastus; QR ainult sissepääsuks", "kõrge: elu ja tervis, ettekirjutus, tootevastutus"],
-       ["ATS-iga ühendamine ainult ATS-ettevõtja kaudu (TuOS § 33; SiM m 1 § 20 lg 5, § 27)", "**Jah**", "sõltumatu kontakt, sündmuse logi, iga-aastane katsetus", "kõrge"],
-       ["EVS-EN 179 / 1125 / 13637", "hea tava ja eeldus, mitte õigusaktiga kohustuslik", "paigaldaja kasutab sertifitseeritud sulgureid", "keskmine: vaidluses tõendamine analüüsiga"],
-       ["GDPR: alus, teavitus, säilitusajad, DPIA (art 6, 13, 35 [KONTROLLIMATA]; TLS § 28 lg 2 p 11, § 41)", "**Jah**", "valmis teavitus, DPIA põhi, „Minu andmed“, automaatne kustutamine", "kõrge: trahv kuni 10 M € / 2 % käibest (IKS § 62)"],
-       ["Volitatud töötleja leping, EL-i andmeasukoht (art 28, 44 [KONTROLLIMATA])", "**Jah**", "DPA, alamtöötlejate loend", "kõrge: B2B ja avalik sektor nõuavad"],
-       ["Palgast kinnipidamine (TLS § 78; TMS § 132)", "**Jah**", "kuu lõpu nõusolek või limiit, arestimisvaba osa, vaikimisi kohene makse", "keskmine: ette antud nõusolek tühine"],
-       ["Erisoodustus (TuMS § 48), käibemaks (KMS § 30)", "**Jah**", "turuhind, erisoodustuse veerg; sõidupäevik 100 % mahaarvamise tõendiks", "keskmine"],
-       ["Säilitamine 7 a (RPS § 12; MKS § 58)", "**Jah**", "ostu- ja päevikuandmeid ei kustutata enne", "madal kuni keskmine"],
-       ["Töötaja oma telefon (TLS § 40 lg 1; VÕS § 628 lg 2)", "kokkulepe", "alternatiiv ilma telefonita", "keskmine"],
-       ["Turvategevus (TurvaTS § 7, § 11)", "ainult häireedastusega süsteemil", "valvekeskuse liides ainult turvafirma kaudu", "madal"],
-       ["Elektritööd (SeOS § 7, 13; MTM m 74 § 3–4)", "**Jah**, üle 50 V AC", "12/24 V SELV komplekt; 230 V teeb elektrik", "keskmine"],
-       ["Tootevastutus ja küberkerksus (VÕS § 1061–1067; EL 2024/2853, 2024/2847 [KONTROLLIMATA])", "**Jah**", "kindlustus, haavatavuste käsitlus, CE kord", "kõrge riistvarakomplekti müügil"],
-       ["IP selgus (AutÕS § 28, § 32 lg 5, § 49 lg 1)", "müügi eeldus", "õigused ühel OÜ-l, kirjalikud üleandmised", "kõrge: ebaselge omandi eest ei maksta"]],
-      laiused=[5.4, 2.8, 4.6, 3.8], pealkiri="Õiguslike nõuete kokkuvõte (Nõunik)", sz=8)
+    T(["Nõue", "Kohustuslik?", "Mida toode peab tegema", "Näidises", "Risk, kui ei tee"],
+      [["Evakuatsiooniuks avaneb ilma telefoni ja serverita (SiM m 17 § 48 lg 1 p 3, § 55 lg 2)", "**Jah**, ka olemasolevas hoones", "mehaaniline väljapääs või riistvaraline vabastus; QR ainult sissepääsuks", "ei kohaldu (demolukk on veebileht)", "kõrge: elu ja tervis, ettekirjutus, tootevastutus"],
+       ["ATS-iga ühendamine ainult ATS-ettevõtja kaudu (TuOS § 33; SiM m 1 § 20 lg 5, § 27)", "**Jah**", "sõltumatu kontakt, sündmuse logi, iga-aastane katsetus", "puudub", "kõrge"],
+       ["EVS-EN 179 / 1125 / 13637", "hea tava ja eeldus, mitte õigusaktiga kohustuslik", "paigaldaja kasutab sertifitseeritud sulgureid", "ei kohaldu", "keskmine: vaidluses tõendamine analüüsiga"],
+       ["GDPR: alus, teavitus, säilitusajad, DPIA (art 6, 13, 35 [KONTROLLIMATA]; TLS § 28 lg 2 p 11, § 41)", "**Jah**", "teavitus, DPIA põhi, „Minu andmed“, automaatne kustutamine", "osaliselt: IP ainult räsina; teavitus, DPIA, „Minu andmed“, kustutamine puuduvad", "kõrge: trahv kuni 10 M € / 2 % käibest (IKS § 62)"],
+       ["Volitatud töötleja leping, EL-i andmeasukoht (art 28, 44 [KONTROLLIMATA])", "**Jah**", "DPA, alamtöötlejate loend", "puudub; andmeasukoht kontrollimata", "kõrge: B2B ja avalik sektor nõuavad"],
+       ["Palgast kinnipidamine (TLS § 78; TMS § 132)", "**Jah**", "kuu lõpu nõusolek või limiit, arestimisvaba osa, vaikimisi kohene makse", "puudub: summa arvutatakse ilma nõusoleku, limiidi ja arestimisvaba osata", "keskmine: ette antud nõusolek tühine"],
+       ["Erisoodustus (TuMS § 48), käibemaks (KMS § 30)", "**Jah**", "turuhind, erisoodustuse veerg; sõidupäevik üks tõend ettevõtluskasutuse kohta", "sõidupäevik CSV olemas; erisoodustuse veerg ja „ainult töö“ režiim puuduvad", "keskmine"],
+       ["Säilitamine 7 a (RPS § 12; MKS § 58)", "**Jah**", "ostu- ja päevikuandmeid ei kustutata enne", "andmeid ei kustutata üldse (automaatset kustutamist pole)", "madal kuni keskmine"],
+       ["Töötaja oma telefon (TLS § 40 lg 1; VÕS § 628 lg 2)", "kokkulepe", "alternatiiv ilma telefonita", "puudub (telefon ainus kandja)", "keskmine"],
+       ["Turvategevus (TurvaTS § 7, § 11)", "ainult häireedastusega süsteemil", "valvekeskuse liides ainult turvafirma kaudu", "ei kohaldu", "madal"],
+       ["Elektritööd (SeOS § 7, 13; MTM m 74 § 3–4)", "**Jah**, üle 50 V AC", "12/24 V SELV komplekt; 230 V teeb elektrik", "ei kohaldu", "keskmine"],
+       ["Tootevastutus ja küberkerksus (VÕS § 1061–1067; EL 2024/2853, 2024/2847 [KONTROLLIMATA])", "**Jah**", "kindlustus, haavatavuste käsitlus, CE kord", "puudub", "kõrge riistvarakomplekti müügil"],
+       ["IP selgus (AutÕS § 28, § 32 lg 5, § 49 lg 1)", "müügi eeldus", "õigused ühel OÜ-l, kirjalikud üleandmised", "litsentsimärked olemas; üleandmised tegemata [__]", "kõrge: ebaselge omandi eest ei maksta"]],
+      laiused=[4.3, 2.3, 3.8, 3.4, 2.8], pealkiri="Õiguslike nõuete kokkuvõte (õigusanalüüs): mida toode peab tegema ja mis on näidises", sz=7.5)
     H2("8.2 Isikuandmed ja töötaja jälgimine")
     B(["Süsteem on lubatud. **Tööandja on vastutav töötleja, tarnija volitatud töötleja.** Igal andmeliigil peab olema eesmärk.",
        "Õiguslik alus: leping (ostud, kinnipidamine, sõidupäevik), juriidiline kohustus (raamatupidamine, maks), õigustatud huvi (ukse- ja "
        "turvalogi). **Nõusolek ei sobi töösuhtes põhialuseks** [KONTROLLIMATA: GDPR art 6, EDPB juhend 05/2020].",
-       "**Mõjuhinnang (DPIA) tuleb teha**, sest jälgimine on süstemaatiline ja andmeid ühendatakse (uks + ost + auto). Tarnija annab valmis põhja.",
+       "**Mõjuhinnang (DPIA) tuleb teha**, sest jälgimine on süstemaatiline ja andmeid ühendatakse (uks + ost + auto). Tarnija koostab põhja (tegemata).",
        "Jälgimine peab olema proportsionaalne (TLS § 28 lg 2 p 11); logisid ei kasutata salajaseks tööaja- ega käitumisjälgimiseks. Kui ukselogi "
        "hakatakse kasutama tööaja arvestuseks, on see uus eesmärk ja töötajat teavitatakse enne.",
-       "Töötajal on õigus oma andmetega tutvuda (TLS § 41) → rakenduses „Minu andmed“ ja eksport.",
+       "Töötajal on õigus oma andmetega tutvuda (TLS § 41) → rakenduses „Minu andmed“ ja eksport (tootmisetapis; näidises puudub).",
        "Asukoha kontroll (Wi-Fi/IP, Bluetooth) ainult sündmusepõhiselt, mitte pidevalt; GPS-rada vaikimisi ei koguta."])
     T(["Andmed", "Säilitamine", "Alus"],
       [["Ostud, kinnipidamised, kuuaruanne", "7 a majandusaasta lõpust", "RPS § 12 lg 1–2; MKS § 58"],
        ["Sõidupäevik ja erisoodustuse arvestus", "7 a", "MKS § 58"],
        ["Ukse- ja seadmelogi", "seadusega määramata; soovitus 3–12 kuud, intsidendi korral menetluse lõpuni", "säilitamise piirang [KONTROLLIMATA: GDPR art 5]"],
-       ["Töösuhte lõpp", "ligipääs kaob kohe; logid kustuvad tähtaja lõpus automaatselt", "[KONTROLLIMATA: GDPR art 5, 17]"]],
-      laiused=[5.2, 6.0, 5.4], pealkiri="Säilitustähtajad (vaikimisi seaded)", sz=9)
+       ["Töösuhte lõpp", "ligipääs kaob kohe (näidises tehtud); logid kustuvad tähtaja lõpus automaatselt (tootmisetapis)", "[KONTROLLIMATA: GDPR art 5, 17]"]],
+      laiused=[5.2, 6.0, 5.4], pealkiri="Säilitustähtajad (sihtseaded; näidises automaatset kustutamist veel pole)", sz=9)
     H2("8.3 Palgast kinnipidamine ja maksud")
-    P("**Kinnipidamine on lubatud ainult töötaja kirjalikku taasesitamist võimaldavas vormis nõusolekul (TLS § 78 lg 1).** Enne nõude tekkimist "
-      "antud üldine nõusolek (nt töölepingus „kõik ostud peetakse palgast kinni“) on tühine (TLS § 78 lg 2). Seepärast:")
+    P("**Kinnipidamine on lubatud ainult töötaja kirjalikku taasesitamist võimaldavas vormis nõusolekul (TLS § 78 lg 1).** Enne tasaarvestamise "
+      "õiguse tekkimist antud nõusolek (nt töölepingus „kõik ostud peetakse palgast kinni“) on tühine (TLS § 78 lg 2). Näidises nõusoleku "
+      "küsimist veel pole. Tootmises:")
     N(["**Põhilahendus:** kuu lõpus kinnitab töötaja rakenduses kuu ostude summa kinnipidamise – nõue on siis juba olemas. Näidistekst on lisas B.",
        "**Limiidi lahendus:** tööandja kannab ostud kuni limiidini (nt 30 €/kuu) ja töötaja annab ette nõusoleku ainult limiiti ületava osa "
-       "kinnipidamiseks (seaduses lubatud erand). Limiidini kaetud osa on erisoodustus.",
+       "kinnipidamiseks. Seaduse erand käib „tööandja arvel tehtavate kulude kokkulepitud limiidi“ kohta; selle kasutamine kohvi ja snäkkide "
+       "puhul on tõlgendus [tõlgendus]. Limiidini kaetud osa on erisoodustus.",
        "**Lihtsaim:** töötaja maksab kohe rakenduses (kaart, pangalink); siis TLS § 78 ei kohaldu. Soovitus: vaikimisi kohene makse, kinnipidamine lisavõimalus.",
        "Kui töötaja kinnitust ei anna, summat kinni ei peeta, vaid esitatakse arve."])
-    P("**Arestimisvaba osa** (TLS § 78 lg 4 → TMS § 132): kuupalga alammäära (2026: 946 €/kuu, VV m 36) ulatuses ei arestita; iga ülalpeetava "
+    P("**Arestimisvaba osa** (TLS § 78 lg 4 → TMS § 132): kuupalga alammäära (alates 01.04.2026 946 €/kuu, VV m 36) ulatuses ei arestita; iga ülalpeetava "
       "kohta suureneb 1/3 alammäära võrra. Kas arvestada neto või bruto, ei selgu sättest otse; konservatiivne on neto ja arvestus jääb "
       "raamatupidajale [tõlgendus]. Töösuhte lõpus sisse nõudmata jäänud võlg on erisoodustus (TuMS § 48 lg 4 p 9).")
     T(["Olukord", "Tagajärg", "Mida toode teeb"],
@@ -816,7 +867,7 @@ def ptk8():
        ["Täishinnaga müük", "erisoodustust ei teki; müük on käive (KMS § 4)", "hinnakirjas turuhind ja ajalugu"],
        ["Kõigile tasuta kontori kohv, tee, vesi", "MTA praktika järgi tavaliselt mitte erisoodustus [KONTROLLIMATA]", "tasuta kategooria, tarbimist isikuga ei seota"],
        ["Sõiduauto erakasutuse võimaldamine", "erisoodustus 1,96 €/kW kuus (üle 5 a autol 1,47 €/kW), **kilomeetrite järgi ei arvutata** (TuMS § 48 lg 8)", "**sõidupäevik ei vähenda erisoodustust**; „ainult töö“ autodel keelatakse tööajaväline broneering"],
-       ["Sõiduauto sisendkäibemaks", "50 %; 100 % ainult eranditult ettevõtluse tarbeks (KMS § 30 lg 3, lg 4 p 5)", "**sõidupäevik on tõend 100 % mahaarvamiseks** (MTA ootab seda praktikas [KONTROLLIMATA])"]],
+       ["Sõiduauto sisendkäibemaks", "50 %; 100 % ainult eranditult ettevõtluse tarbeks (KMS § 30 lg 3, lg 4 p 5)", "sõidupäevik on **üks tõend** eranditult ettevõtluskasutuse kohta (MTA ootab seda praktikas [KONTROLLIMATA]); täielikum koos võtmekapiga"]],
       laiused=[4.4, 6.6, 5.6], pealkiri="Maksud", sz=8.5, esimene_bold=True)
     H2("8.4 Tuleohutus")
     B(["Evakuatsiooniteel olev uks on **pidevalt hõlpsasti avatav kõikidele kasutajatele** (SiM m 17 § 48 lg 1 p 3). Väljumiseks ei tohi vaja "
@@ -862,19 +913,19 @@ def ptk9():
     P("Võrdlus kahe tavapärase alternatiiviga: (1) kaardisüsteem ustele ja (2) võtmed + Excel + kohvikassa. Kaardisüsteemi kohta on siin ainult "
       "allikates olevad üldised väited; konkreetse tootja võrdlust ei ole tehtud.", sz=10)
     T(["#", "Eelis", "QR-digivõti", "Kaardisüsteem", "Võtmed + Excel + kassa"],
-      [["1", "Töösuhte lõpp", "üks klõps sulgeb uksed, autod, automaadid, seadmed", "kaart tuleb blokeerida; muud süsteemid eraldi", "võtmed tagasi nõuda, nimekirjad käsitsi"],
-       ["2", "Kandja", "töötaja telefon; kaarte pole", "kaardi ost, kadumine, väljastamine", "võtmed, lukkude vahetus kadumisel"],
-       ["3", "Riistvara uksel", "siseuksel relee 20–60 € ilma lugejata", "lugeja ja kontroller igal uksel", "mehaaniline lukk"],
+      [["1", "Töösuhte lõpp", "üks klõps sulgeb digivõtmega juhitud uksed, autod, automaadid, seadmed", "kaart tuleb blokeerida; muud süsteemid eraldi", "võtmed tagasi nõuda, nimekirjad käsitsi"],
+       ["2", "Kandja", "töötaja telefon; alternatiiv (kaart, PIN) neile, kes telefoni ei kasuta", "kaardi ost, kadumine, väljastamine", "võtmed, lukkude vahetus kadumisel"],
+       ["3", "Riistvara uksel", "siseuksel relee 20–60 € ilma lugejata (uks kokku ≈ 550–700 € [HINNANG])", "lugeja ja kontroller igal uksel", "mehaaniline lukk"],
        ["4", "Ulatus", "uksed, tööriistad, autod, automaadid, printerid ühes logis", "katab uksi", "eri kohtades, osaliselt mälus"],
-       ["5", "Automaadid ja kinnipidamine", "kuu summa töötaja kaupa, nõusoleku vorm", "–", "kohvikassa, käsitsi nimekiri"],
-       ["6", "Sõidupäevik", "odomeeter ja eesmärk igal sõidul; tõend käibemaksule", "–", "paber, sageli puudulik"],
+       ["5", "Automaadid ja kinnipidamine", "kuu summa töötaja kaupa (näidises); nõusoleku vorm lisas B, rakenduses tootmisetapis", "–", "kohvikassa, käsitsi nimekiri"],
+       ["6", "Sõidupäevik", "odomeeter ja eesmärk igal sõidul; üks tõend käibemaksu jaoks", "–", "paber, sageli puudulik"],
        ["7", "Inventari vastutus", "näha, kelle käes tööriist on", "–", "Excel, kui seda peetakse"],
        ["8", "Ajutine ligipääs", "plaanis: alltöövõtja/külalise link kokkulepitud ajaks", "ajutine kaart", "võtme üleandmine"],
        ["9", "Kulud õigesse kohta", "printer, auto, seade objekti/projekti kaupa", "–", "käsitsi"],
-       ["10", "Juurutus ja laiendus", "uus objekt = kleebis + kirje minutitega; ajutised objektid", "paigaldaja töö iga uksega", "uus võti"]],
+       ["10", "Juurutus ja laiendus", "uus kleebisega objekt (tööriist, seade) minutitega; elektrilukuga uks vajab paigaldust ≈ 7 h [HINNANG]", "paigaldaja töö iga uksega", "uus võti"]],
       laiused=[0.7, 2.8, 4.8, 4.0, 4.3], pealkiri="10 eelist võrreldes alternatiividega", sz=8)
-    P("Kaardisüsteem 4 uksele (kontroller, lugejad, tarkvara, paigaldus) on kontseptsiooni hinnangul samas või kõrgemas hinnasuurusjärgus "
-      "kui digivõti, kuid katab ainult uksi [HINNANG]. Välisuksel ja kõrge turvatasemega ruumis võib kaart jääda – digivõti saab seda täiendada.")
+    P("Kontseptsiooni väitel on kaardisüsteem 4 uksele (kontroller, lugejad, tarkvara, paigaldus) samas või kõrgemas hinnasuurusjärgus "
+      "kui digivõti, kuid katab ainult uksi; pakkumisi ega hinnaandmeid selle kohta ei ole kogutud [KONTROLLIMATA]. Välisuksel ja kõrge turvatasemega ruumis võib kaart jääda – digivõti saab seda täiendada.")
     H2("9.1 Puudused ja piirangud")
     T(["Puudus", "Mõju", "Mida teha"],
       [["Vajab nutitelefoni; režiim A vajab internetti", "võrgukatkestusel siseuks ei avane", "režiim B välisuksel, varuvõti/PIN halduritele, DC-UPS võrguseadmetele"],
@@ -883,6 +934,7 @@ def ptk9():
        ["Staatilist kleebist saab pildistada", "kaugavamine fotoga", "muutuv QR või ainult madala riskiga uksed"],
        ["Riistvara päris lukuga proovimata", "tundmatud ühilduvusvead", "demolaud (BOM a) ja piloot enne müüki"],
        ["Pollimine ei skaleeru", "tasuta plaan kannab ühe seadme", "WebSocket/MQTT tootmises"],
+       ["Skaleeruvus testimata", "sadade töötajate ja seadmetega pole proovitud", "koormustest ja andmemudeli täiendus tootmisetapis"],
        ["Kõrge turvatasemega uksel jääb kaart/biomeetria", "digivõti ei asenda kõike", "täiendav kasutus"],
        ["QR-ligipääs ise ei ole uus", "konkurents uste osas", "eristumine kombinatsiooniga (automaat, auto, tööriist, aruanne)"],
        ["Väike tarnija", "kliendi sõltuvus ühest inimesest", "dokumentatsioon, testid, tavapärane platvorm; partner [__]"],
@@ -905,7 +957,7 @@ def ptk10():
        ["Toitekatkestus", "võrk maas, aku tühi", "fail-safe uks lahti / fail-secure lukus", "aku arvutus eesmärgi järgi (24 h kontor, 72 h objekt), DC-UPS võrgule, varuvõti, aku madala pinge teavitus"],
        ["Võrgu või pilve katkestus", "internet või server maas", "režiim A ei tööta", "režiim B välisustel, offline-nimekiri lühikese kehtivusega, varuvõti/PIN, heartbeat-häire"],
        ["Muutuva QR-i edastus (≤ 60 s)", "ekraani foto saadetakse kohe edasi", "eemalt avamine sama õigusega kasutaja poolt", "ühekordne kood + ekraani kohene uuendus; Wi-Fi/IP või BLE kohalolu; välisustel režiim B"],
-       ["Küberrünne", "vale käsk, varastatud võti, kordusrünne", "volitamata avamine", "allkirjastatud, aeguv, ühekordne käsk; eraldi VLAN; eraldi tokenid relee ja ekraani jaoks; ohutusfunktsioon riistvaras"],
+       ["Küberrünne", "vale käsk, varastatud võti, kordusrünne", "volitamata avamine", "näidises: ühekordne, aeguv käsk ja seadmetoken; tootmisetapis: allkirjastatud käsk, eraldi VLAN, eraldi tokenid relee ja ekraani jaoks; ohutusfunktsioon riistvaras"],
        ["Vandalism ja külm", "lugeja lõhkumine, −25 °C", "uks ei avane", "IK10 kate, kontroller turvalisel poolel, OSDP järelevalve, kütetud IP66 karp, õige aku"],
        ["Isikuandmete rikkumine või kaebus", "liigne jälgimine, puuduv DPIA", "trahv, mainekahju", "DPIA, teavitus, minimeerimine, säilitusajad, DPA"],
        ["Kinnipidamine ilma kehtiva nõusolekuta", "ette antud üldnõusolek", "töötaja nõuab raha tagasi", "kuu lõpu kinnitus või limiit; vaikimisi kohene makse"],
@@ -920,19 +972,20 @@ def ptk11():
     H2("11.1 Kliendile")
     T(["Mida klient võidab", "Millise riski see maandab"],
       [["Üks süsteem uksest snäkini, üks logi ja üks töösuhte lõpu nupp", "unustatud ligipääs pärast töösuhte lõppu; viies kohas käsitsi korjamine"],
-       ["Ehitusinseneri valdkonnateadmine: ehitusobjektid, tööriistad, alltöövõtjad, tuleohutus", "lahendus, mis ei sobi objekti tingimustesse (külm, tolm, konteiner, värav)"],
-       ["Ohutus disainis: väljapääs ei sõltu tarkvarast, ATS-vabastus riistvaras, ukse tootja lubatud lukud", "evakuatsiooni takistamine, tuletõkkeukse klassi kadu, Päästeameti ettekirjutus"],
-       ["Õiguslik pakett: nõusoleku vorm, DPIA põhi, töötaja teavitus, säilitusajad, maksude veerud aruandes", "tühine kinnipidamine, GDPR-kaebus, erisoodustuse viga"],
-       ["Töötav ja testitud tarkvara (22 testi, sõltumatu turvakontroll)", "„paber-toode“, mis ei tööta"],
+       ["Asutaja (ehitusinsener) valdkonnateadmine: ehitusobjektid, tööriistad, alltöövõtjad, tuleohutus", "lahendus, mis ei sobi objekti tingimustesse (külm, tolm, konteiner, värav)"],
+       ["Ohutus disainis: kavandatud nii, et väljapääs ei sõltu telefonist, tarkvarast ega võrgust; nõuetekohase paigalduse tagavad paigaldaja ja valdaja", "evakuatsiooni takistamine, tuletõkkeukse klassi kadu, Päästeameti ettekirjutus"],
+       ["Õigusanalüüs ja näidistekstid (nõusolek lisas B, säilitusajad); DPIA põhi, töötaja teavitus ja erisoodustuse veerg tootmisetapis", "tühine kinnipidamine, GDPR-kaebus, erisoodustuse viga"],
+       ["Töötav ja testitud tarkvara (22 testi, eraldi AI-turvaülevaatus; läbistustest tegemata)", "„paber-toode“, mis ei tööta"],
        ["Odav algus: sisemine uks relee + kleebis; laiendus moodulite kaupa", "suur ühekordne investeering enne kasu nägemist"],
        ["Paigaldus koos registreeritud partneritega (elekter, ATS, vajadusel turvafirma) [__ partnerid]", "lubadeta paigaldus, vastutuse hägusus"]],
       laiused=[8.6, 8.0], pealkiri="Väärtus kliendile", sz=9)
     H2("11.2 Investorile või partnerile")
     B(["**Asutaja:** Margo Pädam, ehitusinsener, ehitusjärelevalve taust [__ aastat ehitusjärelevalves], tunneb ehitusplatsi, tööriistade "
        "kadu ja alltöövõtjate ligipääsu seestpoolt.",
-       "**Olemasolev kood:** `qrwork` (tööriistade register, töötab) ja `digivoti` (uks, muutuv QR, relee, automaat, auto, töösuhte lõpp, "
-       "kuuaruanne); 22 automaattesti, sõltumatu turvakontroll, 4 leitud viga parandatud.",
-       "**Analüüs olemas:** tehniline lahendus koos BOM-iga kolmele konfiguratsioonile, elektritehniline ülevaatus, õiguslik raamistik koos RT viidetega.",
+       "**Olemasolev kood:** qrwork (tööriistade register, töötab) ja digivoti (uks, muutuv QR, relee, automaat, auto, töösuhte lõpp, "
+       "kuuaruanne); 22 automaattesti, eraldi AI-turvaülevaatus, 4 leitud viga parandatud; kolmanda osapoole läbistustesti pole.",
+       "**Analüüs olemas:** tehniline analüüs koos BOM-iga kolmele konfiguratsioonile, elektrianalüüs ja õigusanalüüs koos RT viidetega – "
+       "koostatud AI abil Margo Pädami juhtimisel, pädev elektriinsener ega advokaat pole neid allkirjastanud.",
        "**Valdkonnateadmine:** rannapea on ehitus- ja paigaldusettevõtted 20–250 töötajat (tööriistad, konteinerid, alltöövõtjad, tööautod).",
        "**Mida veel ei ole:** pilootklient ja LOI-d [__ arv], riistvara proov, tootmisküps sideviis. Need on järgmise etapi eesmärgid (ptk 12)."])
     H3("Ise tegemine vs ostmine (build vs buy)")
@@ -967,18 +1020,21 @@ def ptk12():
        ["9", "Kohalik omavalitsus ja allasutused", "väikevallad", "külamajad, spordisaalid, kogukonnaköök: broneering + avamine ilma võtmeta"],
        ["10", "Autorent, ühiskasutusautod, autopark", "üle Eesti", "võtmekapp, broneering, sõidupäevik, kahjufoto"]],
       laiused=[0.7, 4.6, 4.4, 6.9], pealkiri="Kliendisegmendid (kontseptsioon)", sz=8.5)
-    P("Esimene pilootklient, kus võit on kiireim: **ehitusettevõte** (segment 1, `qrwork` on olemas) või **ladu** (segment 3). Avaliku sektori "
+    P("Esimene pilootklient, kus võit on kiireim: **ehitusettevõte** (segment 1, qrwork on olemas) või **ladu** (segment 3). Avaliku sektori "
       "klientidel (KOV, ülikool) lisanduvad küberturvalisuse seaduse tarneahela nõuded; korteriühistus otsustab üldkoosolek.")
     H2("12.2 Tegevuskava")
     T(["Etapp", "Tegevus", "Valmis, kui"],
-      [["1. Alus (nädal 1)", "IP omaniku otsus ja koondamine OÜ-le [__]; Nõuniku [KONTROLLIMATA] viidete lõppkontroll (GDPR, AKI, MTA); Elektriinseneri leidude sõltumatu kontroll", "IP leping allkirjastatud; viited kontrollitud"],
-       ["2. Demolaud (nädal 1–2)", "BOM a riistvara (koos Elektriinseneri lisadega), vaherelee ja toiteplokk; Shelly skript päris lukuga; 2-min video", "demolukk ja automaat töötavad päris releega"],
-       ["3. Kliendivestlused (nädal 2–4)", "10 vestlust ehitus- ja paigaldusettevõtetega (minevik, valu, raha – mitte „kas idee on hea“)", "≥ 6 vestlust, ≥ 1 LOI"],
-       ["4. Piloot (nädal 3–6)", "1 piloodi paigaldus (uksed + tööriistad + automaat), DPIA põhi, töötaja teavitus, nõusoleku vorm", "30 päeva logi; pilootkliendi tagasiside [__]"],
-       ["5. Tootmisküpsus", "WebSocket/MQTT, heartbeat, eraldi seadmetokenid, ühekordne muutuv QR, režiim B (lugeja), kuu lõpu kinnituse vorm, arestimisvaba osa, XLSX/Merit, külalise link, raamatupidaja roll, EL-i andmeasukoht", "turvakontroll uuesti läbitud"],
-       ["6. Paigaldusjuhend", "ühendusskeemid (vaherelee, ATS, avariinupp), kasutuselevõtu protokoll (lisa C), partnerite valik", "Elektri- ja Ehitusinsener kinnitanud"]],
+      [["1. Alus (nädal 1–2)", "IP omaniku otsus ja koondamine OÜ-le [__]; õigusanalüüsi [KONTROLLIMATA] viidete lõppkontroll (GDPR, AKI, MTA); elektrianalüüsi ülevaatus pädeva elektriinseneri poolt [__] (eraldi AI-ülevaatus on juba tehtud)", "IP leping allkirjastatud; viited kontrollitud"],
+       ["2. Demolaud (nädal 2–4)", "BOM a riistvara koos töökindluse lisadega (vaherelee, toiteplokk); Shelly skript päris lukuga; 2-min video", "demolukk ja automaat töötavad päris releega"],
+       ["3. Kliendivestlused (nädal 2–5)", "10 vestlust ehitus- ja paigaldusettevõtetega (minevik, valu, raha – mitte „kas idee on hea“)", "≥ 6 vestlust, ≥ 1 LOI"],
+       ["4. Piloodi eeltingimused (nädal 3–5)", "avaldamine (deploy) ja domeen (Margo otsus); sideviis väikese seadmearvu jaoks või WebSocket; heartbeat; eraldi seadmetokenid; DPA, töötaja teavitus, pilootleping", "pilootkeskkond töötab, dokumendid allkirjastatud"],
+       ["5. Piloot (nädal 4–10)", "ainult siseuksed (mitte evakuatsiooni- ega tuletõkkeuksed, mis vajavad projekti ja ATS-ettevõtjat), tööriistad ja automaat **ilma palgast kinnipidamiseta** (kohene makse või ainult logi)", "≥ 30 päeva logi; pilootkliendi tagasiside [__]"],
+       ["6. Tootmisküpsus", "WebSocket/MQTT, ühekordne muutuv QR, režiim B (teostatavus enne tõendada), kuu lõpu nõusolek, arestimisvaba osa, automaatne kustutamine, „Minu andmed“, XLSX/Merit, külalise link, raamatupidaja roll, EL-i andmeasukoht, koormustest", "turvaülevaatus uuesti läbitud; soovitavalt kolmanda osapoole test"],
+       ["7. Paigaldusjuhend", "ühendusskeemid (vaherelee, ATS, avariinupp), kasutuselevõtu protokoll (lisa C), partnerite valik", "pädev elektri- ja ehitusinsener kinnitanud"],
+       ["Ressurss", "Margo + AI-arendus; elektritöö partner; ATS-ettevõtja (hiljem); jurist lepingutele [__ tunnid/eelarve]", "—"],
+       ["Varuplaan", "kui pilootklienti 10. nädalaks pole: demolaud + video investoritele, rannapea muutmine (ladu/logistika), vestlused uuesti", "—"]],
       laiused=[3.4, 9.2, 4.0], pealkiri="Tegevuskava", sz=8.5, esimene_bold=True)
-    P("Müügipaketi 6 nädala mõõdikud: 10 pilootkliendi vestlust, 3 LOI-d, 6 kohtumist, 2 NDA-d. Kui 6 nädala järel pole ühtegi LOI-d, "
+    P("Müügivestluste mõõdikud 6 nädala jooksul: 10 pilootkliendi vestlust, 3 LOI-d, 6 kohtumist, 2 NDA-d. Kui 6 nädala järel pole ühtegi LOI-d, "
       "muudetakse rannapead (nt ladu/logistika) ja korratakse vestlusi.")
 
 def lisa_a():
@@ -1026,7 +1082,7 @@ def lisa_a():
 
 def lisa_b():
     H1("Lisa B. Nõusoleku näidistekst")
-    P("Allikas: Nõuniku õiguslik raamistik p 2 (TLS § 78; TMS § 132). Nõusolek antakse **kuu lõpus**, kui nõue on juba olemas. Vorm: kirjalikku "
+    P("Allikas: õigusanalüüs p 2 (TLS § 78; TMS § 132). Nõusolek antakse **kuu lõpus**, kui nõue on juba olemas. Vorm: kirjalikku "
       "taasesitamist võimaldav (rakenduse kinnitus, e-kiri või Smart-ID). Enne kasutamist vaatab teksti üle jurist.", sz=10)
     KAST("Mina, [ees- ja perekonnanimi], olen tutvunud oma [kuu/aasta] ostude loeteluga (lisatud, [N] ostu, kokku [summa] €, sh käibemaks).\n\n"
          "Nõustun, et [tööandja nimi] tasaarvestab selle summa minu [kuu] töötasu nõudega ja peab selle töötasust kinni.\n\n"
@@ -1074,23 +1130,24 @@ def lisa_c():
        ["Lõhe ja lühis ATS-liinil", "ATS-ettevõtjaga", "keskseade näitab riket; lukk vaba lõhel ainult variandis, kus väljund on tavaolekus pinge all"],
        ["Pinge lukul külmas (kompensatsiooniga laadija)", "konteiner", "luku lubatud vahemikus"],
        ["Toitekatkestus + taaskäivitus", "kõik releed", "algolek lukus (fail-secure) / vaba (ATS); käivitusel ei avane"]],
-      laiused=[6.0, 3.6, 7.0], pealkiri="Mõõtmised kasutuselevõtul (Elektriinsener p 4.2)", sz=8.5)
+      laiused=[6.0, 3.6, 7.0], pealkiri="Mõõtmised kasutuselevõtul (elektrianalüüs p 4.2)", sz=8.5)
     H2("C.3 Hooldus")
     P("Hooldusgraafik on peatükis 6.8. Iga hoolduse tulemus kantakse protokolli; ATS-vabastuse kontroll kantakse ATS-i päevikusse.")
 
 def lisa_d():
     H1("Lisa D. Allikad")
-    H2("D.1 Lähtefailid (repo `qrwork`)")
+    H2("D.1 Lähtefailid (repo qrwork)")
     T(["Fail", "Autor / roll", "Kasutatud"],
       [["docs/KONTSEPTSIOON_QR_digivoti.md", "kontseptsioon (mustand 01.11.2026)", "põhiidee, moodulid, segmendid, 10 eelist; kulu ja õiguse osas parandatud hilisemate failidega"],
-       ["docs/TEHNILINE_LAHENDUS_digivoti.md v0.1", "Ehitusinsener", "arhitektuur, lukud, ATS, toide, kaabeldus, BOM, hooldus, riskid"],
-       ["docs/ELEKTRI_ULEVAATUS_digivoti.md v2", "Elektriinsener", "parandused (ATS-vaherelee, pingevahemik, Shelly + magnetlukk, aku ja toiteplokk), töökindlus, BOM-i lisad"],
-       ["docs/ELEKTRI_KONTROLL_digivoti.md", "elektri sõltumatu kontroll", "v0.1 7/10, v2 9/10 „rahul“; 1 väike leid"],
-       ["docs/OIGUSLIK_RAAMISTIK_digivoti.md", "Nõunik", "isikuandmed, kinnipidamine, maksud, tuleohutus, turvategevus, vastutus, IP"],
+       ["docs/TEHNILINE_LAHENDUS_digivoti.md v0.1", "tehniline analüüs (AI)", "arhitektuur, lukud, ATS, toide, kaabeldus, BOM, hooldus, riskid"],
+       ["docs/ELEKTRI_ULEVAATUS_digivoti.md v2", "elektrianalüüs (AI)", "parandused (ATS-vaherelee, pingevahemik, Shelly + magnetlukk, aku ja toiteplokk), töökindlus, BOM-i lisad"],
+       ["docs/ELEKTRI_KONTROLL_digivoti.md", "elektrianalüüsi eraldi AI-ülevaatus", "v0.1 7/10, v2 9/10 „rahul“; 1 väike leid"],
+       ["docs/OIGUSLIK_RAAMISTIK_digivoti.md", "õigusanalüüs (AI)", "isikuandmed, kinnipidamine, maksud, tuleohutus, turvategevus, vastutus, IP"],
+       ["docs/kirjeldus/KONTROLL_kirjeldus.md", "kirjelduse v1.0 eraldi AI-ülevaatus", "12 ERROR, 14 MINOR; parandused v1.1-s (D.4)"],
        ["docs/MUUGIPAKETT_digivoti.md", "müügipakett", "ainult „miks osta meilt“ argumendid ja ise tegemise kulu; hinnad ja tehingustruktuur välja jäetud"],
        ["digivoti/README.md", "näidise kirjeldus", "funktsioonid, testid, kontrolli tähelepanekud"]],
       laiused=[5.4, 3.4, 7.8], sz=8.5)
-    H2("D.2 Õigusaktid (kehtiv redaktsioon 01.11.2026, Nõuniku kontroll)")
+    H2("D.2 Õigusaktid (kehtiv redaktsioon 01.11.2026, õigusanalüüsi kontroll)")
     T(["Lühend", "Akt", "RT viide"],
       [["TLS", "Töölepingu seadus", "RT I, 03.07.2026, 35"],
        ["IKS", "Isikuandmete kaitse seadus", "RT I, 30.06.2026, 52"],
@@ -1132,6 +1189,24 @@ def lisa_d():
       laiused=[6.6, 10.0], sz=8.5)
 
 # ================================================================ koostamine
+def lisa_d_muudatused():
+    H2("D.4 Muudatused versioonis 1.1 (eraldi AI-ülevaatuse järgi, KONTROLL_kirjeldus.md)")
+    B(["Kaanele avaldus: analüüsid on koostatud AI abil Margo Pädami juhtimisel, pole pädeva elektriinseneri ega advokaadi allkirjaga; "
+       "„sõltumatu kontroll“ = eraldi AI-ülevaatus. Rollid „tehniline analüüs“, „elektrianalüüs“, „õigusanalüüs“. Lisatud „Kuidas seda dokumenti lugeda“.",
+       "Kõikjal eristatud „näidises tehtud“ ja „tootmisetapis kavandatud“: õiguslike nõuete tabelis veerg „Näidises“, säilitusajad on "
+       "sihtseaded, kuu lõpu nõusolek ja „Minu andmed“ tootmisetapis, teekond on sihtteekond.",
+       "Sõidupäevik: üks tõend eranditult ettevõtluskasutuse kohta, mitte iseenesest 100 % mahaarvamise alus.",
+       "Režiim B offline-kontroll: kavandatud, teostatavus tõendamata; BOM-i juurde arendusrida ja varuvariant kaart/PIN.",
+       "Toide: ühine aku koos võrguseadmetega ≈ 54–69 Ah või eraldi DC-UPS.",
+       "Kasu sõnastus: siseuks kokku ≈ 550–700 €, alles jäävad võtmed/kaardid, alternatiiv telefonita töötajale; evakuatsiooni kohta "
+       "„kavandatud nii, et…“, mitte absoluutne lubadus.",
+       "Uus ptk 7.3 „Tasuvus“ (stsenaariumid, tasuvust pilootandmeteta ei väideta); endine 7.3 on nüüd 7.4.",
+       "Tegevuskava: piloot nädalad 4–10 ainult siseuste, tööriistade ja automaadiga ilma kinnipidamiseta; eeltingimused, ressurss, varuplaan.",
+       "Väiksemad: allkirjastatud käsud ja eraldi tokenid kui tootmise eesmärk; Shelly lülitab tootmises ainult vahereleed; ptk 4 tabelis "
+       "tegemata osad; limiidi erandi tõlgendus ja sätte sõnastus; alammäära kehtivus; 7 170 € eeldused; printeri litsents ja tasuline "
+       "pilveplaan; kaardisüsteemi hinnaväide [KONTROLLIMATA]; uue ukse paigaldus ≈ 7 h; 20–49 töötajaga turg [__]; skaleeruvus testimata; "
+       "sisefailide viited ja koodimärgid lühikokkuvõttest eemaldatud."])
+
 def ehita_docx():
     skeem_arhitektuur(os.path.join(PILDID, "skeem_arhitektuur.png"))
     skeem_reziimid(os.path.join(PILDID, "skeem_reziimid.png"))
@@ -1142,10 +1217,10 @@ def ehita_docx():
         karbi(os.path.join(PILDID, f"digivoti_{nimi}.png"), os.path.join(PILDID, f"k_{nimi}.png"), mh)
     stiilid(); lehekülg()
     kaas()
-    for fn in (ptk1, ptk2, ptk3, ptk4, ptk5, ptk6, ptk7, ptk8, ptk9, ptk10, ptk11, ptk12, lisa_a, lisa_b, lisa_c, lisa_d):
+    for fn in (ptk1, ptk2, ptk3, ptk4, ptk5, ptk6, ptk7, ptk8, ptk9, ptk10, ptk11, ptk12, lisa_a, lisa_b, lisa_c, lisa_d, lisa_d_muudatused):
         fn()
     cp = doc.core_properties
-    cp.title = "QR-digivõti – süsteemi kirjeldus"; cp.author = "Margo Pädam"; cp.subject = "Süsteemi kirjeldus, v1.0 mustand"
+    cp.title = "QR-digivõti – süsteemi kirjeldus"; cp.author = "Margo Pädam"; cp.subject = "Süsteemi kirjeldus, v1.1 mustand"
     doc.save(DOCX_TOOR)
 
 UNO_SKRIPT = r'''
