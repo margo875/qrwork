@@ -32,6 +32,12 @@ Cloudflare Worker + üks Durable Object (SQLite), sõltuvusi pole. Lähtekoht on
 9. **Kus seade on? (sisemine leia mind):** otsing nime, tüübi või inventarinumbri järgi näitab, kelle käes seade on (nimi, telefon, alates) või millises laos see viimati tagastati.
 10. **Leidja (väline leia mind):** sisse logimata inimene näeb seadme QR-ist firma nime ja seadme nime, saab saata sõnumi, kontakti ja (loaga) GPS-asukoha. Haldur saab teate koos selle inimesega, kelle nimel seade on.
 
+## Inventarinumber, superkasutaja ja kataloog (Margo 01.11.2026)
+- **Inventarinumber** tekib uuele seadmele automaatselt: `<lao lühend>-<AAKK><järjekorranumber>`, nt `L1-2611001` = ladu L1, 2026 november, 1. seade. Järjekord algab igas laos iga kuu alguses 001-st. Lao lühend (L1, L2…) antakse automaatselt, haldur võib selle muuta (1–6 tähte/numbrit, unikaalne). Olemasoleva numbriga seadmele võib numbri käsitsi sisestada. Uue seadme lisamisel on ladu kohustuslik.
+- **Tavakasutaja** ei näe seadmete loendit: „Kus on seade?“ näitab tulemusi alles vähemalt 2 märgi järel või QR-koodi skännimisel.
+- **Superkasutaja** (haldus → Kasutajad → linnuke „Superkasutaja“) näeb tühja otsinguga kõiki seadmeid ja vaadet **🏬 Laod ja seis**: igas laos vabad, väljas (kellel, alates) ja remondis olevad seadmed.
+- **Kataloog** (haldus → Seadmed → 📖 Kataloog): A4 nimekiri, kus igal seadmel on **eraldi kataloogi QR** (`/I/<kood>`). See avab otsingus („Kus on seade?“ → 📷 QR) seadme kaardi ainult vaatamiseks. Võtmise/tagastamise skanner keeldub sellest („See on kataloogi QR-kood…“), et laos olevast kataloogist ei saaks seadet võtta ilma seadmeta.
+
 ## Foto (valikuline)
 Foto võtmisel, tagastamisel ja märkusega (nt kahjustuse tõendamiseks vaidluses). Vajab R2 sidet `FOTOD` (`wrangler.toml`, plokk on kommenteeritud). Seadetes: `ei` / `valikuline` / `kohustuslik`. Telefon vähendab foto (≤ 1600 px JPEG, EXIF ja GPS kaovad); server kontrollib tüüpi ja suurust (≤ 1,5 MB). Fotot näeb ainult haldur (logi ja märkused, „📷 foto“). Säilitusaeg: sea R2 bucket'ile elutsükli reegel (nt 365 päeva) Cloudflare'i juhtpaneelis.
 

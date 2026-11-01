@@ -257,7 +257,8 @@ export class Register {
         case '/api/tagasta': return await this.tagasta(k, keha);
         case '/api/marge': return await this.marge(k, keha);
         case '/api/kinnita': return await this.kinnita(k, keha);
-        case '/api/otsi': return await this.otsi(keha);
+        case '/api/otsi': return await this.otsi(k, keha);
+        case '/api/laod': return await this.laod(k);
       }
       return viga('tundmatu tee', 404);
     } catch (e) {
@@ -377,7 +378,7 @@ export class Register {
       seadmed.push({ kood: l.kood, nimi: s?.nimi || '?', invnr: s?.invnr || '', alates: l.alates });
     }
     const kinnitamata = (await this.kinnitamata(k.id)).map(([v, x]) => ({ ...x, id: v.split(':').slice(2).join(':') }));
-    return { kasutaja: { id: k.id, nimi: k.nimi, tel: k.tel, olek: k.olek }, seadmed, kinnitamata, max_seadmeid: seaded.max_seadmeid, firma: seaded.firma, foto: this.fotoReziim(seaded) };
+    return { kasutaja: { id: k.id, nimi: k.nimi, tel: k.tel, olek: k.olek, super: !!k.super }, seadmed, kinnitamata, max_seadmeid: seaded.max_seadmeid, firma: seaded.firma, foto: this.fotoReziim(seaded) };
   }
 
   async seadmeInfo(k, { kood }) {
@@ -515,9 +516,11 @@ export class Register {
     return json({ ok: true, mina: await this.mina(k) });
   }
 
-  // Kus seade on? (sisemine „leia mind“): nimi, tüüp, inventarinumber, kood
-  async otsi({ q }) {
+  // Kus seade on? (sisemine „leia mind“): nimi, tüüp, inventarinumber, kood.
+  // Tavakasutaja näeb ainult otsingu tulemust (vähemalt 2 märki); superkasutaja näeb tühja päringuga kõiki seadmeid.
+  async otsi(k, { q }) {
     const p = puhasta(q, 60).toLowerCase();
+    if (!k.super && p.length < 2) return json({ ok: true, tulemused: [], vaja_paringut: true });
     const seaded = await this.seaded();
     const laenud = new Map((await this.loend('laen:')).map(([, l]) => [l.kood, l]));
     const tul = [];
@@ -526,9 +529,33 @@ export class Register {
       const tekst = `${s.nimi} ${s.tyyp || ''} ${s.invnr || ''} ${s.seerianr || ''} ${s.kood}`.toLowerCase();
       if (p && !tekst.includes(p)) continue;
       tul.push(await this.seadmeKaart(s, laenud.get(s.kood), seaded));
-      if (tul.length >= 50) break;
+      if (tul.length >= (k.super ? 300 : 50)) break;
     }
     return json({ ok: true, tulemused: tul });
+  }
+
+  // Ladude seis (ainult superkasutaja): igas laos vabad seadmed, sealt välja võetud seadmed ja remondis olevad
+  async laod(k) {
+    if (!k.super) return viga('Ainult superkasutajale.', 403);
+    const kohad = (await this.loend('koht:')).map(([, x]) => x);
+    const kasutajad = new Map((await this.loend('kasutaja:')).map(([, x]) => [x.id, x]));
+    const laenud = new Map((await this.loend('laen:')).map(([, l]) => [l.kood, l]));
+    const tyhi = () => ({ vabad: [], valjas: [], remondis: [] });
+    const seis = new Map(kohad.map((x) => [x.kood, tyhi()]));
+    const maaramata = tyhi();
+    for (const [, s] of await this.loend('seade:')) {
+      if (s.olek === 'maha') continue;
+      const l = laenud.get(s.kood);
+      const kohtK = s.asukoht || s.koduladu;
+      const g = seis.get(kohtK) || maaramata;
+      const rida = { kood: s.kood, nimi: s.nimi, invnr: s.invnr || '', tyyp: s.tyyp || '' };
+      if (l) { const kk = kasutajad.get(l.kasutaja); g.valjas.push({ ...rida, kellel: kk?.nimi || '?', tel: kk?.tel || '', alates: l.alates }); }
+      else if (s.olek === 'remondis') g.remondis.push(rida);
+      else g.vabad.push(rida);
+    }
+    const laod = kohad.map((x) => ({ kood: x.kood, nimi: x.nimi, lyhend: x.lyhend || '', ...seis.get(x.kood) }));
+    if (maaramata.vabad.length + maaramata.valjas.length + maaramata.remondis.length) laod.push({ kood: '', nimi: 'Ladu määramata', lyhend: '', ...maaramata });
+    return json({ ok: true, laod });
   }
 
   // ---------- avalik osa: leidja ----------
@@ -641,12 +668,30 @@ export class Register {
     const taatlus = b.taatlus_kuni ? kuupaev(b.taatlus_kuni) : null;
     if (b.taatlus_kuni && !taatlus) return viga('Vigane taatluse kuupäev (AAAA-KK-PP).');
     const koduladu = normKood(b.asukoht || '');
+    const ladu = koduladu ? await this.s.get(`koht:${koduladu}`) : null;
+    // Inventarinumber: uuel seadmel automaatne <lao lühend>-<AAKK><jrk 001…> (nt L1-2611001), kui haldur ei sisesta olemasolevat
+    let invnr = puhasta(b.invnr, 40);
+    if (uus && !invnr) {
+      if (!ladu) return viga('Vali ladu, kus seade registreeritakse (inventarinumbri jaoks).');
+      if (!ladu.lyhend) { // enne lühendite lisamist loodud ladu: anna järgmine vaba L<n>
+        const teised = (await this.loend('koht:')).map(([, x]) => x.lyhend).filter(Boolean);
+        let n = 1; while (teised.includes(`L${n}`)) n++;
+        ladu.lyhend = `L${n}`; await this.s.put(`koht:${koduladu}`, ladu);
+      }
+      const lyh = ladu.lyhend;
+      const aakk = tana(Date.now()).slice(2, 7).replace('-', '');
+      const lv = `invnr:${lyh}:${aakk}`;
+      const n = ((await this.s.get(lv)) || 0) + 1;
+      await this.s.put(lv, n);
+      invnr = `${lyh}-${aakk}${String(n).padStart(3, '0')}`;
+    }
     let k = kood;
     if (uus && !k) do k = juhuslik(12); while (await this.s.get(`seade:${k}`) || await this.s.get(`koht:${k}`));
     const kirje = {
-      ...(s || { loodud: Date.now() }), kood: k, nimi, tyyp: puhasta(b.tyyp, 60), invnr: puhasta(b.invnr, 40), seerianr: puhasta(b.seerianr, 60),
-      taatlus_kuni: taatlus, olek, lisainfo: puhastaMitmerealine(b.lisainfo, 500), koduladu: koduladu && (await this.s.get(`koht:${koduladu}`)) ? koduladu : null, muudetud: Date.now(),
+      ...(s || { loodud: Date.now() }), kood: k, nimi, tyyp: puhasta(b.tyyp, 60), invnr, seerianr: puhasta(b.seerianr, 60),
+      taatlus_kuni: taatlus, olek, lisainfo: puhastaMitmerealine(b.lisainfo, 500), koduladu: ladu ? koduladu : null, muudetud: Date.now(),
     };
+    if (uus) kirje.reg_ladu = ladu ? koduladu : null;
     await this.s.put(`seade:${k}`, kirje);
     await this.logi({ tyyp: uus ? 'seade_lisatud' : 'seade_muudetud', kood: k, nimi: 'haldur', seade: nimi });
     return json({ ok: true, seade: kirje });
@@ -660,14 +705,27 @@ export class Register {
     if (nimi.length < 2) return viga('Sisesta töökoha nimi.');
     if (uus) do kood = juhuslik(12); while (await this.s.get(`koht:${kood}`) || await this.s.get(`seade:${kood}`));
     const reg = ['vaba', 'kinnitamisega'].includes(b.registreerimine) ? b.registreerimine : null;
-    const kirje = { ...((await this.s.get(`koht:${kood}`)) || { loodud: Date.now() }), kood, nimi, registreerimine: reg };
+    const vana = (await this.s.get(`koht:${kood}`)) || { loodud: Date.now() };
+    const teised = (await this.loend('koht:')).map(([, x]) => x).filter((x) => x.kood !== kood);
+    let lyhend = typeof b.lyhend === 'string' ? b.lyhend.trim().toUpperCase() : '';
+    if (lyhend && !/^[A-Z0-9]{1,6}$/.test(lyhend)) return viga('Lühend: 1–6 tähte/numbrit (nt L1).');
+    if (!lyhend) lyhend = vana.lyhend || '';
+    if (!lyhend) { let n = teised.length + 1; while (teised.some((x) => x.lyhend === `L${n}`)) n++; lyhend = `L${n}`; }
+    if (teised.some((x) => x.lyhend === lyhend)) return viga(`Lühend ${lyhend} on juba kasutusel.`, 409);
+    const kirje = { ...vana, kood, nimi, registreerimine: reg, lyhend };
     await this.s.put(`koht:${kood}`, kirje);
     return json({ ok: true, koht: kirje });
   }
 
-  async adminKasutaja({ id, olek }) {
+  async adminKasutaja({ id, olek, super: superK }) {
     const k = typeof id === 'string' && ID_RE.test(id) ? await this.s.get(`kasutaja:${id}`) : null;
     if (!k) return viga('Kasutajat ei leitud', 404);
+    if (olek === undefined && typeof superK === 'boolean') {
+      k.super = superK;
+      await this.s.put(`kasutaja:${id}`, k);
+      await this.logi({ tyyp: superK ? 'super_antud' : 'super_eemaldatud', kasutaja: id, nimi: k.nimi });
+      return json({ ok: true });
+    }
     if (!['aktiivne', 'blokeeritud'].includes(olek)) return viga('vigane olek');
     k.olek = olek;
     await this.s.put(`kasutaja:${id}`, k);

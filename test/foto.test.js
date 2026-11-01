@@ -10,7 +10,7 @@ const JPEG = new Uint8Array(200); JPEG.set([0xff, 0xd8, 0xff, 0xe0]);
 async function alus(lisa) {
   const k = keskkond({ FOTOD: new R2(), ...lisa }); const A = admin(k.env);
   const koht = (await A('koht', { nimi: 'Ladu', registreerimine: 'vaba' })).j.koht;
-  const s1 = (await A('seade', { nimi: 'Nivelliir' })).j.seade;
+  const s1 = (await A('seade', { nimi: 'Nivelliir', asukoht: koht.kood })).j.seade;
   const c = klient(k.env);
   await c('/api/registreeru', { nimi: 'Mari Maasikas', tel: '51234567', parool: 'salasõna', koht: koht.kood });
   return { ...k, A, s1, c };
