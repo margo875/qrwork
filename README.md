@@ -1,6 +1,6 @@
-# QR-töökoht (qrwork)
+# Kratt (repo qrwork)
 
-Tööriistade ja mõõteseadmete register töökohale: **leia mind**, **seadmete register** ja **võtmine/tagastamine** QR-koodiga.
+**Kratt** – Eesti muistendi abiline, kes hoiab peremehe vara, toob ja viib. Tööriistade ja mõõteseadmete register töökohale: **leia mind**, **seadmete register** ja **võtmine/tagastamine** QR-koodiga.
 Cloudflare Worker + üks Durable Object (SQLite), sõltuvusi pole. Lähtekoht on leiamind'i ülesehitus (QR-generaator, teavitused, turvapõhimõtted).
 
 ## Kuidas see töötab
@@ -57,7 +57,7 @@ npx wrangler secret put TOKEN_SECRET      # openssl rand -base64 32
 npm run deploy
 ```
 Siis `/admin` → Seaded (firma nimi) → Töökohad (lisa, prindi plakat) → Seadmed (lisa, prindi sildid).
-**Domeen: `qrwork.kindavel.ee`** (Margo otsus 01.11.2026; `wrangler.toml` `routes`). QR sisaldab aadressi püsivalt (`HTTPS://<DOMEEN>/S/<KOOD>`, suurtähtedega, alfanumeeriline režiim, veaparandus Q).
+**Domeen: `kratt.kindavel.ee`** (Margo otsus 01.11.2026; `wrangler.toml` `routes`; `qrwork.kindavel.ee` on üleminekuks alles, kustuta see pärast proovimist. Seni prinditud katsekleebised viitavad vanale domeenile). QR sisaldab aadressi püsivalt (`HTTPS://<DOMEEN>/S/<KOOD>`, suurtähtedega, alfanumeeriline režiim, veaparandus Q).
 
 ## Turvalisus ja privaatsus
 - Parool: PBKDF2-SHA256 (vaikimisi 100 000 iteratsiooni, 16-baidine sool). Sessioon: juhuslik 40-märgine token, serveris ainult SHA-256 räsi, küpsis `HttpOnly; Secure; SameSite=Lax`. API nõuab päist `X-QW: 1` (CSRF).

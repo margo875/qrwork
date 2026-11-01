@@ -13,7 +13,7 @@ export async function teavita(env, tekst, gps) {
     }));
   }
   if (env.NTFY_TOPIC) {
-    const h = { 'Content-Type': 'text/plain; charset=utf-8', Title: 'QR-tookoht' };
+    const h = { 'Content-Type': 'text/plain; charset=utf-8', Title: 'Kratt' };
     if (env.NTFY_TOKEN) h.Authorization = `Bearer ${env.NTFY_TOKEN}`;
     tood.push(fetch(`${env.NTFY_URL || 'https://ntfy.sh'}/${encodeURIComponent(env.NTFY_TOPIC)}`, { method: 'POST', headers: h, body: tekst.slice(0, 4000) }));
   }

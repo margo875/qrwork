@@ -38,7 +38,7 @@ video{width:100%;max-height:45vh;background:#000;border-radius:12px;object-fit:c
 
 export function appLeht(nonce, { seade = '', koht = '', info = '' } = {}) {
   return `<!doctype html><html lang="et"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex"><title>Tööriistad</title><style>${STIIL}</style></head>
+<meta name="robots" content="noindex"><title>Kratt</title><style>${STIIL}</style></head>
 <body><main id="sisu"><p>Laen…</p></main>
 <script nonce="${nonce}">
 ${ABI}
@@ -53,7 +53,7 @@ async function api(tee,keha){
   catch(e){return {ok:false,viga:'Võrguühendus puudub. Proovi uuesti.'}}
 }
 const sisu=h=>{peata();$('#sisu').innerHTML=h;window.scrollTo(0,0);};
-const pea=()=>'<h1>'+esc(S.firma||'Tööriistad')+'</h1>';
+const pea=()=>'<h1>'+esc(S.firma||'Kratt')+'</h1>';
 
 // ---------- algus ----------
 (async function(){
@@ -340,7 +340,7 @@ async function leidjaVaade(kood){
 
 export function adminLeht(nonce) {
   return `<!doctype html><html lang="et"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex"><title>Tööriistade haldus</title><style>${STIIL}
+<meta name="robots" content="noindex"><title>Krati haldus</title><style>${STIIL}
 main{max-width:1100px}table{border-collapse:collapse;width:100%;background:#fff;font-size:.9rem}td,th{border-bottom:1px solid #e5e7eb;padding:6px;text-align:left;vertical-align:top}
 .tabs{flex-wrap:wrap}.tabs button{flex:0 0 auto}.vana{background:#fee2e2}button.v{padding:6px 10px;font-size:.85rem;margin:2px}
 .vorm{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:0 12px}
@@ -349,7 +349,7 @@ main{max-width:1100px}table{border-collapse:collapse;width:100%;background:#fff;
  .sildid{display:flex;flex-wrap:wrap;gap:3mm}.silt{width:32mm;height:44mm;border:0.2mm dashed #999;padding:1mm;text-align:center;font:bold 2.6mm/1.15 Arial,sans-serif;overflow:hidden;break-inside:avoid}
  .silt svg{width:28mm;height:28mm;display:block;margin:0 auto}.silt .k{font:2.2mm monospace}
  .plakat{text-align:center;font-family:Arial,sans-serif;page-break-after:always}.plakat svg{width:120mm;height:120mm}.plakat h1{font-size:12mm;margin:6mm 0 2mm}.plakat h2{font-size:9mm;margin:0 0 6mm}.plakat ol{text-align:left;font-size:5.5mm;max-width:160mm;margin:6mm auto}}
-</style></head><body><main id="m"><h1>Tööriistade haldus</h1>
+</style></head><body><main id="m"><h1>Krati haldus</h1>
 <div id="login" class="kaart"><label>Halduse võti (ADMIN_TOKEN)</label><input id="tok" type="password" autocomplete="current-password">
 <label class="mark"><input type="checkbox" id="mal"><span>Jäta selles brauseris meelde</span></label><button class="sin" id="sisse">Ava</button><div id="lviga"></div></div>
 <div id="app" hidden><div class="tabs" id="tabs"></div><div id="sisu"></div></div></main><div id="print"></div>
