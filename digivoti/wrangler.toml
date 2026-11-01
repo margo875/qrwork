@@ -1,0 +1,22 @@
+# QR-digivõti: eraldi Worker (ei ole seotud repo juurkausta tööriistade registriga qrwork).
+name = "qrdigivoti"
+main = "src/worker.js"
+compatibility_date = "2025-06-01"
+
+# Domeen on Margo otsus (veel tegemata). Seni ainult workers.dev aadress; custom_domain'i siia ei panda.
+workers_dev = true
+
+# Kõik andmed (kasutajad, objektid, logid, ostud) on ühes Durable Objectis (SQLite, tasuta plaanil lubatud).
+[[durable_objects.bindings]]
+name = "DIGIVOTI"
+class_name = "Digivoti"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Digivoti"]
+
+# Saladused (mitte siia faili!):
+#   npx wrangler secret put ADMIN_TOKEN     (≥ 16 märki, nt openssl rand -base64 32)
+#   npx wrangler secret put TOKEN_SECRET    (≥ 16 märki; IP-räsi sool)
+#   valikuline: PBKDF2_ITER (10000–100000, vaikimisi 100000)
+# Kohalikuks proovimiseks (wrangler dev): fail .dev.vars (gitignore'is), nt ADMIN_TOKEN=... ja TOKEN_SECRET=...

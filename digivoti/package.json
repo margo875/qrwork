@@ -1,0 +1,12 @@
+{
+  "name": "qrdigivoti",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "QR-digivõti: uksed, automaadid, seadmed ja autod telefoniga (investorinäidis; Cloudflare Worker + Durable Object)",
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "kohalik": "node test/kohalik_server.mjs",
+    "dev": "npx wrangler@^4.36.0 dev"
+  }
+}
