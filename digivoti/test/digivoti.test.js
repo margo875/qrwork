@@ -166,6 +166,9 @@ test('ost ja kuuaruanne: summa sentides, kinnipidamine töötaja kaupa, CSV Exce
   // relee „väljasta“ käsk
   const k = (await seade(env)('relee', kohv.kood, kohv.seadmetoken)).j.kask;
   assert.equal(k.liik, 'valjasta'); assert.equal(k.toode, 'Latte');
+  // automaadid võtavad ka ülejäänud käsud (võtmata käsk aegub ja ost tühistatakse, vt kontrolli testid)
+  assert.equal((await seade(env)('relee', kohv.kood, kohv.seadmetoken)).j.kask.toode, 'Espresso');
+  assert.equal((await seade(env)('relee', snakk.kood, snakk.seadmetoken)).j.kask.toode, 'Šokolaad');
   // tundmatu toode
   assert.equal((await mari('/api/ost', { kood: kohv.kood, toode: 'XXXXXX' })).status, 404);
   // hind muutub: varasem ost jääb vana hinnaga

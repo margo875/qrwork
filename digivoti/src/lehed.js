@@ -237,7 +237,7 @@ const qrUrl=kood=>(location.protocol+'//'+location.host).toUpperCase()+'/O/'+koo
 
 // --- logi ---
 function sundmus(x){const t=x.tyyp, n=esc(x.nimi||''), o=esc(x.objekt||'');
-  const T={uks_avatud:['🔓',n+' avas: '+o],uks_keeldutud:['⛔',n+' — '+o+': '+esc(x.pohjus||'')],ost:['☕',n+' ostis '+esc(x.toode)+' ('+esc(x.automaat||'')+') '+euro(x.hind_s)+' €'],tooted_muudetud:['🏷','Tooted muudetud: '+o],seadmetoken_uus:['🔑','Uus seadmetoken: '+o],objekt_muudetud:['✏','Objekt muudetud: '+o],kasutaja_muudetud:['✏','Kasutaja muudetud: '+n],kutse_loodud:['✉','Uus kutse: '+n],
+  const T={uks_avatud:['🔓',n+' avas: '+o],uks_keeldutud:['⛔',n+' — '+o+': '+esc(x.pohjus||'')],ost:['☕',n+' ostis '+esc(x.toode)+' ('+esc(x.automaat||'')+') '+euro(x.hind_s)+' €'],ost_tuhistatud:['↩',n+' ost tühistati: '+esc(x.toode)+' '+euro(x.hind_s)+' € ('+esc(x.pohjus||'')+')'],tooted_muudetud:['🏷','Tooted muudetud: '+o],seadmetoken_uus:['🔑','Uus seadmetoken: '+o],objekt_muudetud:['✏','Objekt muudetud: '+o],kasutaja_muudetud:['✏','Kasutaja muudetud: '+n],kutse_loodud:['✉','Uus kutse: '+n],
     kasutus_algus:['▶',n+' alustas: '+o+(x.odo!=null?' ('+x.odo+' km)':'')],kasutus_lopp:['⏹',n+' lõpetas: '+o+(x.km!=null?' ('+x.km+' km)':'')+(x.markus?' — '+esc(x.markus):'')],
     toosuhe_lopp:['🛑','Töösuhe lõppes: '+n+' (sessioone kehtetuks '+x.sessioone+')'],kutse_kasutatud:['📱',n+' aktiveeris telefoni'],kasutaja_loodud:['👤','Uus kasutaja: '+n],
     kasutaja_taastatud:['♻','Taastatud: '+n],objekt_loodud:['➕','Uus objekt: '+o],demo_loodud:['🎬','Demoandmed loodud']}[t]||['•',esc(t)+' '+n+' '+o];

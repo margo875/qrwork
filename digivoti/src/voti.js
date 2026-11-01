@@ -171,6 +171,7 @@ export class Digivoti {
     this.env = env || {};
     this.vead = new Map();       // ebaõnnestumiste loendur (mälus)
     this.nahtud = new Map();     // seadme viimane pöördumine (mälus, ainult halduri vaate jaoks)
+    this.votmas = new Set();     // parasjagu kasutatavad kutsed (samaaegse topeltkasutuse vastu)
     // Testid saavad kella asendada (env.__kell); päris keskkonnas on see alati Date.now
     this.kell = typeof this.env.__kell === 'function' ? this.env.__kell : () => Date.now();
   }
@@ -190,6 +191,8 @@ export class Digivoti {
     return v.length >= max;
   }
   viga(voti) { const v = this.vead.get(voti) || []; v.push(Date.now()); this.vead.set(voti, v); }
+  // Õnnestunud katse: eemalda ette broneeritud vigane katse (vt logiSisse)
+  vabasta(voti) { const v = this.vead.get(voti) || []; v.pop(); this.vead.set(voti, v); }
 
   // ---------- sessioon ----------
   async uusSessioon(id) {
@@ -260,12 +263,13 @@ export class Digivoti {
     const t = normTel(tel);
     if (!t || typeof parool !== 'string') return viga('Sisesta telefon ja PIN/parool.');
     if (this.piiratud(`tel:${t}`, 8) || this.piiratud(`ip:${ip}`, 30)) return viga('Liiga palju vigaseid katseid. Proovi 15 minuti pärast.', 429);
+    // Katse loetakse vigaseks ENNE räsi arvutamist: samaaegsed päringud ei pääse piirangust mööda (PBKDF2 ootamise ajal
+    // jõuavad DO-sse teised päringud). Õnnestumisel broneering vabastatakse.
+    this.viga(`tel:${t}`); this.viga(`ip:${ip}`);
     const id = await this.s.get(`tel:${t}`);
     const k = id ? await this.s.get(`kasutaja:${id}`) : null;
-    if (!k || !k.rasi || !(await parooliKontroll(parool, k.rasi))) {
-      this.viga(`tel:${t}`); this.viga(`ip:${ip}`);
-      return viga('Vale telefon või PIN/parool.', 401);
-    }
+    if (!k || !k.rasi || !(await parooliKontroll(parool, k.rasi))) return viga('Vale telefon või PIN/parool.', 401);
+    this.vabasta(`tel:${t}`); this.vabasta(`ip:${ip}`);
     if (k.olek !== 'aktiivne') return viga('Konto on peatatud. Pöördu halduri poole.', 403);
     return json({ ok: true, mina: await this.mina(k) }, 200, { 'Set-Cookie': await this.uusSessioon(k.id) });
   }
@@ -291,9 +295,16 @@ export class Digivoti {
     const r = await this.kutseLeia(token);
     if (!r) { this.viga(`kutse:${ip}`); return viga('Kutse on kehtetu või aegunud. Küsi haldurilt uus.', 404); }
     const { kv, k } = r;
-    k.rasi = await parooliRasi(parool, this.iter());
+    // Ühekordne ka samaaegsete päringute korral: kutse võetakse sünkroonselt (mälus, üks DO eksemplar) ja kustutatakse
+    // enne PBKDF2-d, et teine samaaegne kasutus seda enam ei leiaks.
+    if (this.votmas.has(kv)) { this.viga(`kutse:${ip}`); return viga('Kutse on kehtetu või aegunud. Küsi haldurilt uus.', 404); }
+    this.votmas.add(kv);
+    try {
+      if (!(await this.s.get(kv))) { this.viga(`kutse:${ip}`); return viga('Kutse on kehtetu või aegunud. Küsi haldurilt uus.', 404); }
+      await this.s.delete(kv);
+      k.rasi = await parooliRasi(parool, this.iter());
+    } finally { this.votmas.delete(kv); }
     k.olek = 'aktiivne';
-    await this.s.delete(kv);
     await this.s.put(`kasutaja:${k.id}`, k);
     await this.kustutaSessioonid(k.id);
     await this.logi({ tyyp: 'kutse_kasutatud', kasutaja: k.id, nimi: k.nimi });
@@ -302,6 +313,7 @@ export class Digivoti {
 
   // ---------- kasutaja vaated ----------
   async mina(k) {
+    await this.puhastaJarjekorrad();
     const nyyd = this.kell();
     const kuu = tallinn(nyyd).kuu;
     const ostud = (await this.loend(`ost:${kuu}:`)).map(([, o]) => o).filter((o) => o.kasutaja === k.id).sort((a, b) => b.aeg - a.aeg);
@@ -333,11 +345,34 @@ export class Digivoti {
     }
     return json({ ok: true, objekt: this.avalikObjekt(o), kontroll, kasutus });
   }
+  // Releekäskude järjekord: aegunud käsud eemaldatakse; aegunud „väljasta“ = automaat ei väljastanud → ost tühistatakse
+  // (palgast ei peeta kinni kauba eest, mida ei saadud).
+  async jarjekord(kood, nyyd = this.kell()) {
+    const q = (await this.s.get(`relee:${kood}`)) || [];
+    const elus = q.filter((x) => x.aegub > nyyd);
+    for (const x of q) if (!(x.aegub > nyyd)) await this.tyhistaOst(x, 'automaat ei võtnud käsku 20 s jooksul (võrguühendus?)');
+    return { elus, muutus: elus.length !== q.length };
+  }
+  async kirjutaJarjekord(kood, q) { if (q.length) await this.s.put(`relee:${kood}`, q); else await this.s.delete(`relee:${kood}`); }
+  async puhastaJarjekorrad() {
+    const nyyd = this.kell();
+    for (const [v] of await this.loend('relee:')) { const { elus, muutus } = await this.jarjekord(v.slice(6), nyyd); if (muutus) await this.kirjutaJarjekord(v.slice(6), elus); }
+  }
+  async tyhistaOst(kask, pohjus) {
+    if (!kask || kask.liik !== 'valjasta' || !kask.ost_voti) return;
+    const o = await this.s.get(kask.ost_voti);
+    if (!o) return;
+    await this.s.delete(kask.ost_voti);
+    await this.logi({ tyyp: 'ost_tuhistatud', kasutaja: o.kasutaja, nimi: o.nimi, kood: o.kood, automaat: o.automaat, objekt: o.automaat, toode: o.toode, hind_s: o.hind_s, pohjus });
+  }
+  // false = järjekord täis (seade ei võta käske); käsku ei lisata ja vanu ei visata ära
   async lisaKask(kood, kask) {
     const nyyd = this.kell();
-    const q = ((await this.s.get(`relee:${kood}`)) || []).filter((x) => x.aegub > nyyd).slice(-9);
-    q.push({ id: juhuslik(8), aeg: nyyd, aegub: nyyd + KASK_MS, ...kask });
-    await this.s.put(`relee:${kood}`, q);
+    const { elus } = await this.jarjekord(kood, nyyd);
+    if (elus.length >= 10) { await this.kirjutaJarjekord(kood, elus); return false; }
+    elus.push({ id: juhuslik(8), aeg: nyyd, aegub: nyyd + KASK_MS, ...kask });
+    await this.s.put(`relee:${kood}`, elus);
+    return true;
   }
   async labiLogi(k, o, tulemus, pohjus = '') {
     const aeg = this.kell();
@@ -358,7 +393,7 @@ export class Digivoti {
       else if (!(await dynKontroll(o.saladus, String(d).toUpperCase(), this.kell()))) pohjus = 'QR-kood on aegunud. Skänni ekraanilt uuesti.';
     }
     if (pohjus) { this.viga(`ava:${k.id}`); await this.labiLogi(k, o, false, pohjus); return viga(pohjus, 403); }
-    await this.lisaKask(o.kood, { liik: 'ava', sekundit: o.avamisaeg_s || 5, kasutaja: k.id, kellele: k.nimi });
+    if (!(await this.lisaKask(o.kood, { liik: 'ava', sekundit: o.avamisaeg_s || 5, kasutaja: k.id, kellele: k.nimi }))) return viga('Uks ei vasta (lukk ei ole ühenduses). Proovi hiljem.', 503);
     await this.labiLogi(k, o, true);
     return json({ ok: true, avatud: true, sekundit: o.avamisaeg_s || 5, nimi: o.nimi });
   }
@@ -375,9 +410,13 @@ export class Digivoti {
     this.viga(`ost:${k.id}`);
     const aeg = this.kell();
     const kirje = { tyyp: 'ost', kasutaja: k.id, nimi: k.nimi, tel: k.tel, kood: o.kood, automaat: o.nimi, toode: t.nimi, hind_s: t.hind_s, aeg };
-    await this.s.put(`ost:${tallinn(aeg).kuu}:${ts13(aeg)}:${juhuslik(4)}`, kirje);
+    const ov = `ost:${tallinn(aeg).kuu}:${ts13(aeg)}:${juhuslik(4)}`;
+    await this.s.put(ov, kirje);
+    if (!(await this.lisaKask(o.kood, { liik: 'valjasta', sekundit: 1, toode: t.nimi, kasutaja: k.id, kellele: k.nimi, ost_voti: ov }))) {
+      await this.s.delete(ov);
+      return viga('Automaat ei vasta (ei ole ühenduses). Ostu ei tehtud.', 503);
+    }
     await this.logi(kirje);
-    await this.lisaKask(o.kood, { liik: 'valjasta', sekundit: 1, toode: t.nimi, kasutaja: k.id, kellele: k.nimi });
     const m = await this.mina(k);
     return json({ ok: true, toode: t.nimi, hind_s: t.hind_s, kuu_summa_s: m.ostud_summa_s });
   }
@@ -450,9 +489,9 @@ export class Digivoti {
       return json({ ok: true, nimi: o.nimi, url: `${url.origin}/O/${o.kood}?d=${await dynKood(o.saladus, w)}`, kehtib_ms: (w + 1) * AKEN_MS - nyyd });
     }
     // relee: ühekordne käsk. Võetud käsk kustutatakse kohe; aegunud käske ei täideta.
-    const q = ((await this.s.get(`relee:${kood}`)) || []).filter((x) => x.aegub > nyyd);
+    const { elus: q } = await this.jarjekord(kood, nyyd);
     const kask = q.shift() || null;
-    if (q.length) await this.s.put(`relee:${kood}`, q); else await this.s.delete(`relee:${kood}`);
+    await this.kirjutaJarjekord(kood, q);
     return json({ ok: true, nimi: o.nimi, tyyp: o.tyyp, kask: kask ? { id: kask.id, liik: kask.liik, sekundit: kask.sekundit, toode: kask.toode || null, kellele: kask.kellele || '' } : null });
   }
 
@@ -529,8 +568,10 @@ export class Digivoti {
     if (!k) return viga('Kasutajat ei leitud', 404);
     if (k.olek === 'peatatud') return viga('Kasutaja on peatatud. Taasta enne uut kutset.', 409);
     const kutse = await this.uusKutse(k);
-    await this.logi({ tyyp: 'kutse_loodud', kasutaja: k.id, nimi: k.nimi });
-    return json({ ok: true, kutse });
+    // Kadunud telefon: vanad sessioonid kehtetuks kohe (mitte alles siis, kui uus kutse kasutatakse)
+    const sessioone = await this.kustutaSessioonid(k.id);
+    await this.logi({ tyyp: 'kutse_loodud', kasutaja: k.id, nimi: k.nimi, sessioone });
+    return json({ ok: true, kutse, sessioone });
   }
   // Töösuhte lõpp: peatatud, kõik sessioonid ja kutsed kehtetud, ootel releekäsud tühistatud, pooleli kasutused lõpetatud
   async adminPeata({ id }) {
@@ -542,10 +583,12 @@ export class Digivoti {
     const sessioone = await this.kustutaSessioonid(k.id);
     for (const [v, x] of await this.loend('kutse:')) if (x.kasutaja === k.id) await this.s.delete(v);
     let kaske = 0;
-    for (const [v, q] of await this.loend('relee:')) {
+    for (const [v] of await this.loend('relee:')) {
+      const { elus: q } = await this.jarjekord(v.slice(6));
       const jaab = q.filter((x) => x.kasutaja !== k.id);
+      for (const x of q) if (x.kasutaja === k.id) await this.tyhistaOst(x, 'töösuhe lõppes enne väljastamist');
       kaske += q.length - jaab.length;
-      if (jaab.length) await this.s.put(v, jaab); else await this.s.delete(v);
+      await this.kirjutaJarjekord(v.slice(6), jaab);
     }
     let kasutusi = 0;
     for (const [v, x] of await this.loend('kasutus:')) {
@@ -621,6 +664,7 @@ export class Digivoti {
   }
   kuu(v) { return typeof v === 'string' && /^\d{4}-(0[1-9]|1[0-2])$/.test(v) ? v : tallinn(this.kell()).kuu; }
   async kinnipidamised(kuu) {
+    await this.puhastaJarjekorrad();
     const r = new Map();
     for (const [, o] of await this.loend(`ost:${kuu}:`)) {
       const x = r.get(o.kasutaja) || { kasutaja: o.kasutaja, nimi: o.nimi, tel: o.tel || '', arv: 0, summa_s: 0 };
@@ -638,6 +682,7 @@ export class Digivoti {
       soite: kasut.filter((x) => x.objekti_tyyp === 'auto').length, km: kasut.reduce((s, x) => s + (x.km || 0), 0) };
   }
   async aruanne(kuuSisse, liik) {
+    await this.puhastaJarjekorrad();
     const kuu = this.kuu(kuuSisse);
     if (liik === 'kinnipidamised') {
       const kinni = await this.kinnipidamised(kuu);

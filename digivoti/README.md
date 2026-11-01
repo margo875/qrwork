@@ -15,14 +15,14 @@ kopeeritud kausta `src/` (päises päritolu ja litsents: MIT ja Apache-2.0). Sõ
 | Durable Object `Digivoti` | `src/voti.js` | kasutajad, kutsed, sessioonid, objektid, õigusreegel, muutuv QR, releekäsud, ostud, kasutused, aruanded |
 | Lehed | `src/lehed.js` | kasutaja rakendus `/`, `/O/<kood>`, `/kutse`; haldus `/admin`; ukse ekraan `/ekraan/<kood>`; demolukk `/demo/uks/<kood>`; demoautomaat `/demo/automaat/<kood>` |
 | Riistvara | `riistvara/shelly_skript.js` | Shelly Gen2+ skript, mis pollib releekäsku (**päris seadmel proovimata**) |
-| Testid | `test/*.test.js` | 12 testi (õigused, ajaaken, muutuv QR, relee, töösuhte lõpp, ost ja kuuaruanne, CSRF, haldus) |
+| Testid | `test/*.test.js` | 22 testi (õigused, ajaaken, muutuv QR, relee, töösuhte lõpp, ost ja kuuaruanne, CSRF, haldus; `kontroll.test.js`: ründekatsed) |
 | Kohalik server | `test/kohalik_server.mjs` | sama `worker.fetch`, mälus andmed, ilma wranglerita |
 | Brauseritest | `test/brauser_demo.mjs` | Playwright: kogu demo stsenaarium läbi (ei ole `npm test`-i osa) |
 
 ### Funktsioonid
 1. **Kasutajad ja rühmad:** haldur loob kasutaja (nimi, telefon, rühmad) → kutselink/QR (7 päeva, ühekordne; token on
    URL-i `#`-osas, seega ei jõua serveri logidesse). Kasutaja valib PIN-i/parooli (≥ 6 märki), telefon jääb sisse logituks
-   (HttpOnly küpsis 180 päeva). Uus kutse (kadunud telefon) muudab vanad sessioonid kehtetuks.
+   (HttpOnly küpsis 180 päeva). Uus kutse (kadunud telefon) muudab vanad sessioonid kohe kehtetuks.
 2. **Objektid:** uks, automaat, seade (arvuti/printer), auto. 12-märgine kood, QR `/O/<kood>`, lubatud rühmad
    (`*` = kõik), valikuline ajaaken (nt E–R 07:00–19:00, Eesti aja järgi).
 3. **Uks:** skänn → õigus → logi → releele ühekordne käsk „ava N s“. Relee (Shelly/ESP32) **küsib** ise
@@ -30,6 +30,8 @@ kopeeritud kausta `src/` (päises päritolu ja litsents: MIT ja Apache-2.0). Sõ
 4. **Muutuv QR:** uksel valikuline režiim; `/ekraan/<kood>` näitab iga 30 s uut koodi (HMAC-SHA256 objekti saladusest ja
    ajaaknast, nagu TOTP). Kehtib praegune ja eelmine aken (≤ 60 s); staatilise koodiga sellist ust ei ava.
 5. **Automaat:** tootevalik → kinnitus → ost (hind sentides, täisarv; ostu hind fikseeritakse ostuhetkel) → releele „väljasta“.
+   Kui automaat käsku 20 s jooksul ei võta (võrgust väljas) või töösuhe lõpetatakse enne väljastamist, ost tühistatakse
+   (logis `ost_tuhistatud`) ja palgast ei peeta kinni. Kui käskude järjekord on täis (10), uut ostu ei tehta (503).
 6. **Seade/auto:** „Alusta kasutust“ / „Lõpeta“; autol odomeetri näit alguses ja lõpus (ei saa olla väiksem eelmisest) ja eesmärk.
 7. **Töösuhte lõpp:** üks nupp → kasutaja peatatud, kõik sessioonid ja kutsed kehtetud, ootel releekäsud tühistatud,
    pooleli kasutused lõpetatud märkusega. Ükski objekt enam ei avane (testitud).
@@ -88,3 +90,40 @@ demo jaoks muuda ajaaken halduses (Objektid → Muuda) või võta linnuke ära.
   MDB-liides, XLSX ja Meriti/Directo formaat, mitme firma tugi, tuletõrjesignaali ühendus.
 - Õiguslik pool (palgast kinnipidamise nõusolek, erisoodustus, GDPR, tuleohutus) on kontseptsioonis märgitud
   **[KONTROLLIMATA]**; näidis neid ei lahenda.
+
+## Kontrolli tähelepanekud (sõltumatu kontroll 01.11.2026)
+
+Parandatud (ERROR, igaühel test `test/kontroll.test.js`):
+1. **Sisselogimise piirang oli samaaegsete päringutega möödapääsetav** (vigane katse loeti alles pärast PBKDF2-d; 25
+   paralleelset PIN-i läksid kõik läbi). Nüüd loetakse katse enne räsi arvutamist, õnnestumisel vabastatakse.
+2. **Kutse ei olnud samaaegsete päringute korral ühekordne** (kaks paralleelset kasutust said mõlemad sessiooni).
+   Nüüd võetakse kutse sünkroonselt ja kustutatakse enne PBKDF2-d.
+3. **Uus kutse (kadunud telefon) ei sulgenud vana telefoni sessiooni** enne, kui uus kutse kasutati (kuni 7 päeva).
+   Nüüd kustutatakse sessioonid kutse loomisel.
+4. **Ost jäi palgast kinnipidamisse, kui automaat ei väljastanud**: käsk aegus võtmata (automaat võrgust väljas), töösuhte
+   lõpp tühistas käsu või täis järjekord viskas vanema käsu ära. Nüüd ost tühistatakse; täis järjekorraga ostu ei tehta.
+
+MINOR (parandamata, otsus või tootmisetapi töö):
+- Muutuva QR-i kood ei ole ühekordne: kehtib ≤ 60 s kõigile sama ukse õigusega kasutajatele (ekraani foto saab kolleegile
+  saata). Tootmises: kood ühekordseks + ekraan uueneb kohe pärast kasutust või BLE/NFC kohaloleku kontroll.
+- Relee ja ukseekraan kasutavad sama seadmetokenit: ukse juures oleva tahvli token võimaldab releekäske „ära võtta“
+  (uks ei avane). Soovitus: eraldi tokenid.
+- Vigaste katsete loendurid on DO mälus (taaskäivitus nullib). Seadme ja halduse piirang kontrollitakse enne autentimist,
+  seega sama IP taga (kontori NAT) olev ründaja saab õige relee/halduri 15 min lukustada; telefoni piirang (8/15 min)
+  võimaldab lukustada konkreetse kasutaja sisselogimise.
+- Sisselogimise vastuse aeg paljastab, kas telefon on registreeritud (tundmatule ei arvutata PBKDF2-d).
+- `/api/objekt` näitab õiguseta kasutajale objekti nime, tooted ja seadme hetkekasutaja nime (koodid on niikuinii sildil).
+- Ajaaken üle kesköö (nt 22:00–06:00) ei ole toetatud (algus < lõpp).
+- Auto: töösuhte lõpul lõpetatud sõidu järel jääb `odo_viimane` vanaks; lõpunäidu hüppel pole mõistlikku ülempiiri.
+- Logi, aegunud kutsed ja ostud kasvavad piiramatult; `uusSessioon` ja `kustutaSessioonid` loevad kõik sessioonid (sobib
+  näidisele, mitte sadadele töötajatele).
+- Ost tühistatakse ainult siis, kui käsk jäi võtmata. Kui relee võttis käsu, aga automaat ei väljastanud (MDB viga),
+  kinnitust ei küsita – tootmises vaja seadme väljastuskinnitust. Kasutaja telefon näitab „Väljastan“ ka siis, kui
+  automaat on võrgust väljas (ost tühistub 20 s pärast, kasutajale eraldi teadet ei tule).
+- Kuuaruanne: seadme ja auto kasutus läheb alguskuu alla; kuu vahetusel pooleli sõit ilmub alles pärast lõppu.
+- Halduse tooteloendis võib anda korduva toote id (ost valib esimese); peatatud kasutaja taastamisel jääb vana PIN kehtima.
+- CSP lubab `style-src 'unsafe-inline'`; halduse võti on brauseri `sessionStorage`-is (XSS-i korral leketav; XSS-i ei
+  leitud: kõik nimed läbivad `esc()`, URL-i parameetrid puhastatakse serveris).
+- Kontrollitud ja korras: hind ja kogus ainult serverist, IDOR (mina, kasutuse lõpetamine), relee ilma õiguseta, seadmetoken
+  ja ühekordne käsk, võltsitud `X-IP-Rasi` kirjutatakse üle, ajaaken Europe/Tallinn (ka suveaeg), CSV valemikaitse
+  (`= + - @` tab, CR), admin-tokeni ajastuskindel võrdlus, CSRF päis `X-QW`, töösuhte lõpp tühistab kõik sessioonid.
