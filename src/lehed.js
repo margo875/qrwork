@@ -252,7 +252,7 @@ async function seadmeVaade(kood,skannitud){
    (s.taatlus_kuni?'<div>Taatlus/kalibreerimine kuni: '+esc(s.taatlus_kuni)+'</div>':'')+(s.olek!=='aktiivne'?'<div><b>Olek: '+esc(s.olek==='remondis'?'remondis/hoolduses':'maha kantud')+'</b></div>':'')+
    (s.lisainfo?'<p class="vaike">'+esc(s.lisainfo)+'</p>':'')+
    (kel?'<div class="'+(j.minu?'ok':'hoiatus')+'">'+(j.minu?'Seade on sinu nimel':'Kasutuses: <b>'+esc(kel.nimi)+'</b> '+(kel.tel?'<a href="tel:'+esc(kel.tel)+'">'+esc(kel.tel)+'</a>':''))+' alates '+esc(aeg(kel.alates))+(kel.koht?' ('+esc(kel.koht)+')':'')+'</div>'
-       :'<div class="ok">Vaba'+(s.asukoht?' – viimati tagastatud: '+esc(s.asukoht):'')+'</div>')+
+       :'<div class="ok">Vaba'+(s.asukoht?' – '+esc(s.asukoht):'')+'</div>')+
    s.hoiatused.map(t=>'<div class="hoiatus">⚠️ '+esc(t)+'</div>').join('')+'</div>';
   if(skannitud&&(j.minu||v.lubatud||kel)) h+=fotoHTML('foto_k','Foto seadmest');
   if(skannitud){

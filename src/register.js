@@ -673,7 +673,12 @@ export class Register {
     let invnr = puhasta(b.invnr, 40);
     if (uus && !invnr) {
       if (!ladu) return viga('Vali ladu, kus seade registreeritakse (inventarinumbri jaoks).');
-      const lyh = ladu.lyhend || 'L';
+      if (!ladu.lyhend) { // enne lühendite lisamist loodud ladu: anna järgmine vaba L<n>
+        const teised = (await this.loend('koht:')).map(([, x]) => x.lyhend).filter(Boolean);
+        let n = 1; while (teised.includes(`L${n}`)) n++;
+        ladu.lyhend = `L${n}`; await this.s.put(`koht:${koduladu}`, ladu);
+      }
+      const lyh = ladu.lyhend;
       const aakk = tana(Date.now()).slice(2, 7).replace('-', '');
       const lv = `invnr:${lyh}:${aakk}`;
       const n = ((await this.s.get(lv)) || 0) + 1;
