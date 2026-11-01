@@ -2,9 +2,13 @@ name = "qrwork"
 main = "src/worker.js"
 compatibility_date = "2025-06-01"
 
-# Domeen: qrwork.kindavel.ee (Margo otsus 01.11.2026). kindavel.ee DNS on samas Cloudflare'i kontos,
+# Domeen: kratt.kindavel.ee (Margo otsus 01.11.2026, rakenduse nimi „Kratt“). kindavel.ee DNS on samas Cloudflare'i kontos,
 # custom_domain loob DNS-kirje ja sertifikaadi esimesel deploy'l. QR-kleebistes on aadress püsivalt, seda ei muudeta.
-routes = [{ pattern = "qrwork.kindavel.ee", custom_domain = true }]
+# qrwork.kindavel.ee (esimene katsedomeen) jääb üleminekuks alles; eemalda see pärast kratt.kindavel.ee proovimist.
+routes = [
+  { pattern = "kratt.kindavel.ee", custom_domain = true },
+  { pattern = "qrwork.kindavel.ee", custom_domain = true },
+]
 workers_dev = false
 
 # Kõik andmed (register, kasutajad, laenud, logi) on ühes Durable Objectis (SQLite, tasuta plaanil lubatud).
