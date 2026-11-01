@@ -1,0 +1,29 @@
+name = "qrwork"
+main = "src/worker.js"
+compatibility_date = "2025-06-01"
+
+# Domeen on Margo otsus (nt tooriist.kindavel.ee). Kuni otsuseni töötab *.workers.dev aadressil.
+# NB: QR-kleebistesse läheb aadress püsivalt, seega vali domeen ENNE kleebiste printimist.
+workers_dev = true
+# routes = [{ pattern = "tooriist.kindavel.ee", custom_domain = true }]
+
+# Kõik andmed (register, kasutajad, laenud, logi) on ühes Durable Objectis (SQLite, tasuta plaanil lubatud).
+[[durable_objects.bindings]]
+name = "REGISTER"
+class_name = "Register"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Register"]
+
+# Valikuline: fotod võtmisel/tagastamisel/märkusega. Loo: npx wrangler r2 bucket create qrwork-fotod
+# Ilma selle plokita on foto funktsioon välja lülitatud.
+# [[r2_buckets]]
+# binding = "FOTOD"
+# bucket_name = "qrwork-fotod"
+
+# Saladused (mitte siia faili!):
+#   npx wrangler secret put ADMIN_TOKEN     (≥ 16 märki, nt openssl rand -base64 32)
+#   npx wrangler secret put TOKEN_SECRET    (≥ 16 märki; IP-räsi sool)
+#   valikuline: TG_BOT_TOKEN + TG_CHAT_ID (Telegram), NTFY_TOPIC (+ NTFY_TOKEN, NTFY_URL)
+#   valikuline: PBKDF2_ITER (10000–100000, vaikimisi 100000; vt README „Parool ja CPU“)
