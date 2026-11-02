@@ -582,10 +582,11 @@ export class Register {
     const e = (v) => String(v || '').replace(/\\/g, '\\\\').replace(/[,;]/g, (m) => '\\' + m).replace(/\r?\n/g, '\\n');
     const pv = (d) => d.replace(/-/g, '');
     const jargmine = (d) => new Date(Date.parse(d) + 86400000).toISOString().slice(0, 10).replace(/-/g, '');
-    const tl = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Kratt//kratt.kindavel.ee//ET', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH', `X-WR-CALNAME:${e(seaded.firma)} – Kratt`, 'X-WR-TIMEZONE:Europe/Tallinn'];
+    const tl = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Krativara//ET', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH', `X-WR-CALNAME:${e(seaded.firma)} – Krativara`, 'X-WR-TIMEZONE:Europe/Tallinn'];
     const stamp = new Date().toISOString().replace(/[-:]/g, '').slice(0, 15) + 'Z';
     for (const [, s] of await this.elusLoend('seade:')) {
       if (s.olek === 'maha' || !s.taatlus_kuni) continue;
+      // UID-id jäävad „@kratt“ (püsivad, et tellitud kalendrites ei tekiks topeltsündmusi)
       tl.push('BEGIN:VEVENT', `UID:taatlus-${s.kood}-${pv(s.taatlus_kuni)}@kratt`, `DTSTAMP:${stamp}`, `DTSTART;VALUE=DATE:${pv(s.taatlus_kuni)}`, `DTEND;VALUE=DATE:${jargmine(s.taatlus_kuni)}`,
         `SUMMARY:${e(`Taatlus: ${s.nimi}${s.invnr ? ` (${s.invnr})` : ''}`)}`, `DESCRIPTION:${e(`Taatlus/kalibreerimine kehtib kuni ${s.taatlus_kuni}.`)}`,
         'BEGIN:VALARM', 'ACTION:DISPLAY', `DESCRIPTION:${e(`Taatlus aegub: ${s.nimi}`)}`, `TRIGGER:-P${seaded.taatlus_hoiatus_paevi || 30}D`, 'END:VALARM', 'END:VEVENT');

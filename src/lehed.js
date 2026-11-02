@@ -5,10 +5,12 @@ import { QR_JS } from './qrgen.js';
 
 // Skännitud QR teksti tõlgendus. Kehtib ainult sama hosti /S/<kood> (seade) või /K/<kood> (töökoht).
 // Funktsioon läheb lehele .toString() abil, seega sama kood töötab brauseris ja testides.
+// host: oma domeen või domeenide loend (uus + vana, et vanad kleebised töötaksid ka pärast domeenivahetust)
 export function koodTekstist(t, host) {
   t = String(t || '').trim();
   const m = /^https?:\/\/([^/?#\s]+)\/([SKI])\/([0-9A-Z]{12})\/?$/i.exec(t);
-  if (!m || m[1].toLowerCase() !== String(host || '').toLowerCase()) return null;
+  const hostid = (Array.isArray(host) ? host : [host]).map((h) => String(h || '').toLowerCase());
+  if (!m || !hostid.includes(m[1].toLowerCase())) return null;
   return { liik: m[2].toUpperCase(), kood: m[3].toUpperCase() };
 }
 export function kasitsiKood(v) {
@@ -22,6 +24,8 @@ const paevi=t=>Math.floor((Date.now()-t)/86400000);
 const NONCE=document.currentScript.nonce;
 function laeSkript(src){return new Promise((ok,ei)=>{const s=document.createElement('script');s.src=src;s.nonce=NONCE;s.onload=ok;s.onerror=ei;document.head.appendChild(s);});}`;
 
+// Kõik selle rakenduse domeenid (kleebistel olevad QR-id jäävad kehtima). Uus domeen lisatakse siia ja wrangler.toml-i.
+export const OMA_HOSTID = ['kratt.kindavel.ee', 'krativara.ee', 'www.krativara.ee'];
 const STIIL = `*{box-sizing:border-box}body{font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;margin:0;background:#f3f4f6;color:#111}
 main{max-width:640px;margin:0 auto;padding:16px}h1{font-size:1.35rem;margin:.2rem 0 .6rem}h2{font-size:1.1rem;margin:1.2rem 0 .5rem}
 .kaart{background:#fff;border-radius:12px;padding:14px;margin:10px 0;box-shadow:0 1px 3px rgba(0,0,0,.08)}
@@ -39,12 +43,13 @@ video{width:100%;max-height:45vh;background:#000;border-radius:12px;object-fit:c
 
 export function appLeht(nonce, { seade = '', koht = '', info = '' } = {}) {
   return `<!doctype html><html lang="et"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex"><title>Kratt</title><style>${STIIL}</style></head>
+<meta name="robots" content="noindex"><title>Krativara</title><style>${STIIL}</style></head>
 <body><main id="sisu"><p>Laen…</p></main>
 <script nonce="${nonce}">
 ${ABI}
 ${koodTekstist.toString()}
 ${kasitsiKood.toString()}
+const HOSTID=[location.host,...${JSON.stringify(OMA_HOSTID)}];
 const URL_SEADE=${JSON.stringify(seade)}, URL_KOHT=${JSON.stringify(koht)}, URL_INFO=${JSON.stringify(info)};
 let S={firma:'',koht:null,mina:null};
 const LS={get(k){try{return localStorage.getItem(k)||''}catch(e){return ''}},set(k,v){try{localStorage.setItem(k,v)}catch(e){}}};
@@ -54,7 +59,7 @@ async function api(tee,keha){
   catch(e){return {ok:false,viga:'Võrguühendus puudub. Proovi uuesti.'}}
 }
 const sisu=h=>{peata();$('#sisu').innerHTML=h;window.scrollTo(0,0);};
-const pea=()=>'<h1>'+esc(S.firma||'Kratt')+'</h1>';
+const pea=()=>'<h1>'+esc(S.firma||'Krativara')+'</h1>';
 
 // ---------- algus ----------
 (async function(){
@@ -221,7 +226,7 @@ function skanner(reziim){
     if(navigator.vibrate)navigator.vibrate(80);
     valik.push({kood,info:j,ule:false,teise:false}); teade('Lisatud: '+j.seade.nimi,'ok'); joonista();
   };
-  const tekstist=t=>{const k=koodTekstist(t,location.host);
+  const tekstist=t=>{const k=koodTekstist(t,HOSTID);
     if(!k){teade('Tundmatu QR-kood. Pöördu administraatori poole.');if(navigator.vibrate)navigator.vibrate([200,100,200]);return;}
     if(k.liik==='K'){teade('See on töökoha QR-kood. Skänni seadmel olevat koodi.','hoiatus');return;}
     if(k.liik==='I'){teade('See on kataloogi QR-kood (ainult otsinguks). Skänni seadmel olevat koodi.','hoiatus');return;}
@@ -304,7 +309,7 @@ function otsing(){
    '<div id="kaam" hidden><video id="vid" muted playsinline></video><div id="teade"></div></div><div id="tul"></div><button class="suur" id="tagasi">Tagasi</button>');
   $('#tagasi').onclick=()=>pohi();
   $('#qr').onclick=()=>{ if(toimib){peata();$('#kaam').hidden=true;return;} $('#kaam').hidden=false;
-    kaamera($('#vid'),t=>{const k=koodTekstist(t,location.host);
+    kaamera($('#vid'),t=>{const k=koodTekstist(t,HOSTID);
       if(!k||k.liik==='K'){$('#teade').innerHTML='<div class="viga">'+(k?'See on töökoha QR-kood.':'Tundmatu QR-kood. Pöördu administraatori poole.')+'</div>';if(navigator.vibrate)navigator.vibrate([200,100,200]);return;}
       peata(); seadmeVaade(k.kood,false);},t=>{$('#teade').innerHTML='<div class="hoiatus">'+esc(t)+'</div>';}); };
   let t=null; const otsi=async()=>{const j=await api('/api/otsi',{q:$('#q').value}); if(!j.ok){$('#tul').innerHTML='<div class="viga">'+esc(j.viga)+'</div>';return;}

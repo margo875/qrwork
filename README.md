@@ -1,6 +1,6 @@
-# Kratt (repo qrwork)
+# Krativara (repo qrwork; varem „Kratt“)
 
-**Kratt** – Eesti muistendi abiline, kes hoiab peremehe vara, toob ja viib. Tööriistade ja mõõteseadmete register töökohale: **leia mind**, **seadmete register** ja **võtmine/tagastamine** QR-koodiga.
+**Krativara** (nimi Margo otsusega 02.11.2026, varem „Kratt“; kratt – Eesti muistendi abiline, kes hoiab peremehe vara, toob ja viib). Tööriistade ja mõõteseadmete register töökohale: **leia mind**, **seadmete register** ja **võtmine/tagastamine** QR-koodiga.
 Cloudflare Worker + üks Durable Object (SQLite), sõltuvusi pole. Lähtekoht on leiamind'i ülesehitus (QR-generaator, teavitused, turvapõhimõtted).
 
 ## Kuidas see töötab
@@ -79,6 +79,7 @@ npm run deploy
 ```
 Siis `/admin` → Seaded (firma nimi) → Töökohad (lisa, prindi plakat) → Seadmed (lisa, prindi sildid).
 **Domeen: `kratt.kindavel.ee`** (Margo otsus 01.11.2026; `wrangler.toml` `routes`; `qrwork.kindavel.ee` eemaldati 01.11.2026; sellele viitavad katsekleebised enam ei tööta). QR sisaldab aadressi püsivalt (`HTTPS://<DOMEEN>/S/<KOOD>`, suurtähtedega, alfanumeeriline režiim, veaparandus Q).
+**Domeenivahetus (Margo 02.11.2026):** uus domeen `krativara.ee` luuakse hiljem (saadavus kontrollimata), vana `kratt.kindavel.ee` suunab edasi. Valmis koodis: `PEA_HOST` (`wrangler.toml` `[vars]`) → kõik muud domeenid saavad 301 (GET) / 308 (POST) sama teega; rakenduse QR-lugeja tunneb ära ka vana domeeni kleebised (`src/lehed.js` `OMA_HOSTID`). Sisselogimine tuleb uuel domeenil korra uuesti teha (küpsis on domeeni kohta). Sammud: registreeri `krativara.ee` → lisa tsoon Cloudflare'i → `wrangler.toml` routes + `PEA_HOST` (näide failis) → deploy. Uued kleebised prindi alles pärast seda.
 
 ## Turvalisus ja privaatsus
 - Parool: PBKDF2-SHA256 (vaikimisi 100 000 iteratsiooni, 16-baidine sool). Sessioon: juhuslik 40-märgine token, serveris ainult SHA-256 räsi, küpsis `HttpOnly; Secure; SameSite=Lax`. API nõuab päist `X-QW: 1` (CSRF).

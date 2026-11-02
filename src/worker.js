@@ -11,6 +11,13 @@ const BOT_UA = /\b(bot|crawler|spider|slurp|facebookexternalhit|whatsapp|telegra
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
+    // Domeenivahetus: kui PEA_HOST on seatud (wrangler.toml [vars]), suunatakse kõik teised domeenid sinna sama teega.
+    // GET 301, muud 308 (meetod ja keha säilivad). Vanad kleebised (nt kratt.kindavel.ee) töötavad edasi.
+    if (env.PEA_HOST && url.hostname !== env.PEA_HOST && url.hostname !== 'localhost' && url.hostname !== '127.0.0.1') {
+      const uus = new URL(url.pathname + url.search, `https://${env.PEA_HOST}`);
+      const kood = request.method === 'GET' || request.method === 'HEAD' ? 301 : 308;
+      return new Response(null, { status: kood, headers: { Location: uus.toString(), 'Cache-Control': 'no-store' } });
+    }
     const tee = url.pathname;
     const m = /^\/([SKIski])\/([0-9A-Za-z]{12})\/?$/.exec(tee);
     if (request.method === 'GET' || request.method === 'HEAD') {

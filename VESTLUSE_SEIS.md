@@ -1,4 +1,4 @@
-# Vestluse seis – Kratt (repo qrwork), 02.11.2026
+# Vestluse seis – Krativara (endine Kratt, repo qrwork), 02.11.2026
 
 **Teema:** QR-põhine tööriistade register töökohale „Kratt“, https://kratt.kindavel.ee (Cloudflare Worker + Durable Object, deploy Workers Builds'iga `main`-ist).
 
@@ -17,4 +17,7 @@
 
 **Märkus:** teine lõim („QR-põhine digivõti süsteem“) kirjutas samasse repos harusse `claude/qr-digital-key-system-z0mhov` (docs/); see on eraldi projekt, mitte Kratt.
 
-**Järgmine samm:** Margo vastab otsustele 1–3; uues lõimes alusta sellest failist ja README-st.
+**Otsus 1 (Margo 02.11):** „nimi Krativara, aadress täpsustada, domeen krativara.ee loomisel, vana hakkab suunama edasi“. Tehtud harus `ccr-b7663577-93oge9`: nimi lehtedel/teavitustes/kalendris, `PEA_HOST` suunamine (301/308), vana domeeni QR-id tuntakse ära, testid 19/19. krativara.ee saadavus kontrollimata (pilvest RDAP ei avane).
+**Ootel:** otsus 3 (versiooninumber + vealogi + PWA: jah/ei) – Margo vastus jäi sõnumist puudu; otsus 2 (eraldi Cloudflare'i konto) koos domeeni registreerimisega.
+
+**Järgmine samm:** Margo registreerib krativara.ee (või kontrollib saadavust internet.ee-s), vastab otsusele 3.
