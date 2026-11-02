@@ -188,3 +188,12 @@ test('leidja leht: üks privaatsuslause, automaatne asukoht, loendurid, Helista 
   assert.match(h, /maxlength="400"/); assert.match(h, /maxlength="100"/); assert.match(h, /Saada omanikule/);
   assert.match(r.headers.get('Content-Security-Policy'), /script-src 'nonce-/);
 });
+
+test('kõigi lehtede skriptid on süntaktiliselt korras (haldus, rakendus, dev)', async () => {
+  const { appLeht, adminLeht, devLeht } = await import('../src/lehed.js');
+  for (const [nimi, h] of [['app', appLeht('n', { seade: 'ABCDEFGHJK01' })], ['admin', adminLeht('n')], ['dev', devLeht('n')]]) {
+    const skriptid = [...h.matchAll(/<script nonce="n">([\s\S]*?)<\/script>/g)].map((m) => m[1]);
+    assert.ok(skriptid.length > 0, nimi);
+    for (const sk of skriptid) assert.doesNotThrow(() => new Function(sk), `${nimi}: süntaksiviga`);
+  }
+});

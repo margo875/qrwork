@@ -1287,7 +1287,9 @@ async function loeJson(request) {
   const len = Number(request.headers.get('Content-Length') || 0);
   if (len > 32 * 1024) return null;
   try {
-    const t = await request.text();
+    const b = await loeKeha(request, 32 * 1024); // voona piiriga: Content-Length puudub (chunked) → mälu ei täitu
+    if (!b) return null;
+    const t = new TextDecoder().decode(b);
     if (t.length > 32 * 1024) return null;
     const o = JSON.parse(t || '{}');
     return o && typeof o === 'object' && !Array.isArray(o) ? o : null;
