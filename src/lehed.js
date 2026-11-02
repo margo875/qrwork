@@ -25,16 +25,19 @@ const NONCE=document.currentScript.nonce;
 function laeSkript(src){return new Promise((ok,ei)=>{const s=document.createElement('script');s.src=src;s.nonce=NONCE;s.onload=ok;s.onerror=ei;document.head.appendChild(s);});}`;
 
 // QR-lugeja (kaamera + BarcodeDetector või jsQR), ühine rakendusele ja haldusele (eeltrükitud kleebise skännimine seadme lisamisel)
-const SKANNER_JS = `let voog=null, toimib=false, det=null;
-function peata(){toimib=false;if(voog){voog.getTracks().forEach(t=>t.stop());voog=null;}}
+const SKANNER_JS = `let voog=null, toimib=false, det=null, kv=0;
+// kv = kaamera käivituse number: peata() ja uus käivitus muudavad selle, hilinenud getUserMedia voog suletakse kohe
+function peata(){kv++;toimib=false;if(voog){voog.getTracks().forEach(t=>t.stop());voog=null;}}
 async function kaamera(video,onTekst,teade){
+  peata(); const minu=kv;
   if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){teade('Kaamera ei ole selles brauseris saadaval. Sisesta kood käsitsi (seadme sildil).');return;}
-  try{voog=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false});}
-  catch(e){teade('Kaamera luba puudub. Luba kaamera brauseri seadetes või sisesta kood käsitsi.');return;}
-  video.srcObject=voog; video.setAttribute('playsinline',''); try{await video.play();}catch(e){}
+  let v;try{v=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}},audio:false});}
+  catch(e){if(minu!==kv)return;teade('Kaamera luba puudub. Luba kaamera brauseri seadetes või sisesta kood käsitsi.');return;}
+  if(minu!==kv){v.getTracks().forEach(t=>t.stop());return;}
+  voog=v; video.srcObject=voog; video.setAttribute('playsinline',''); try{await video.play();}catch(e){}
   if(!det&&'BarcodeDetector' in window){try{const f=await BarcodeDetector.getSupportedFormats();if(f.includes('qr_code'))det=new BarcodeDetector({formats:['qr_code']});}catch(e){}}
   if(!det&&!window.jsQR){try{await laeSkript('/jsqr.js');}catch(e){teade('QR-lugeja laadimine ebaõnnestus. Sisesta kood käsitsi.');return;}}
-  toimib=true; const c=document.createElement('canvas'), cx=c.getContext('2d',{willReadFrequently:true});
+  if(minu!==kv)return; toimib=true; const c=document.createElement('canvas'), cx=c.getContext('2d',{willReadFrequently:true});
   let viimane='',viimaneAeg=0;
   const samm=async()=>{ if(!toimib) return;
     try{ let t=null;
@@ -536,7 +539,7 @@ let PARTIID=[];
 async function laePartiid(){const j=await a('partiid');PARTIID=j.ok?j.partiid:[];return PARTIID;}
 const vabad=p=>p.koodid.filter(k=>!k.nimi).map(k=>k.kood);
 async function partiid(teade){
-  await laePartiid();
+  peata(); await laePartiid();
   $('#sisu').innerHTML='<h2>📦 Eeltrükitud koodid (partiid)</h2><div class="kaart"><p class="vaike">Genereeri koodid ette, prindi või saada trükikotta. Kleebis pannakse seadmele ja seadme lisamisel sisestad (või valid) selle koodi väljale „Kood“. Sidumata koodi skännimisel näeb leidja „See kood ei ole veel kasutusel“.</p>'+
    '<div class="vorm"><div><label>Kogus (1–200)</label><input id="p_n" type="number" min="1" max="200" value="24"></div><div><label>Märkus (valikuline)</label><input id="p_nimi" maxlength="60" placeholder="nt trükikoda nov 2026"></div></div><button class="roh" id="p_loo">Genereeri</button><div id="p_teade">'+(teade||'')+'</div></div>'+
    (PARTIID.length?PARTIID.map(p=>{const v=vabad(p);return '<div class="kaart"><b>'+esc(aeg(p.aeg))+'</b>'+(p.nimi?' · '+esc(p.nimi):'')+' · koode '+p.koodid.length+', vabu <b>'+v.length+'</b>'+
