@@ -3,6 +3,7 @@
 // kui brauseril pole BarcodeDetector'it. Kõik kasutaja sisestatud väärtused läbivad esc().
 import { QR_JS } from './qrgen.js';
 import { EXIF_JS } from './exif.js';
+import { KLEEBIS_JS } from './kleebis.js';
 
 // Skännitud QR teksti tõlgendus. Kehtib ainult sama hosti /S/<kood> (seade) või /K/<kood> (töökoht).
 // Funktsioon läheb lehele .toString() abil, seega sama kood töötab brauseris ja testides.
@@ -372,6 +373,7 @@ let LW=null;
 function leidLopp(){if(LW){LW.lopeta();LW=null;}}
 async function leidjaVaade(kood){
   const j=await api('/api/avalik',{kood});
+  if(j.sidumata){sisu('<h1>Krativara</h1><div class="kaart"><p>See kood ei ole veel kasutusel.</p><p class="vaike"><a href="/admin#seo='+esc(kood)+'">Haldur: seo kood seadmega</a></p></div>');return;}
   if(!j.ok){sisu('<h1>Tundmatu QR-kood</h1><div class="viga">Seda koodi ei ole registris. Pöördu administraatori poole.</div>');return;}
   S.firma=j.firma; const T=j.token;
   sisu('<h1>'+esc(j.firma)+'</h1><div class="kaart"><p>See tööriist kuulub firmale <b>'+esc(j.firma)+'</b>:<br><b>'+esc(j.nimi)+'</b>'+(j.invnr?' ('+esc(j.invnr)+')':'')+'</p>'+
@@ -449,9 +451,10 @@ main{max-width:1100px}table{border-collapse:collapse;width:100%;background:#fff;
 .tabs{flex-wrap:wrap}.tabs button{flex:0 0 auto}.vana{background:#fee2e2}button.v{padding:6px 10px;font-size:.85rem;margin:2px}
 .vorm{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:0 12px}
 #print{display:none}
-@media print{@page{size:A4;margin:8mm}body{background:#fff}main{display:none}#print{display:block}
+@media print{@page{size:A4;margin:8mm}body{background:#fff}main,#jalus,#uusver{display:none!important}#print{display:block}
  .sildid{display:flex;flex-wrap:wrap;gap:3mm}.silt{width:32mm;height:44mm;border:0.2mm dashed #999;padding:1mm;text-align:center;font:bold 2.6mm/1.15 Arial,sans-serif;overflow:hidden;break-inside:avoid}
- .silt svg{width:28mm;height:28mm;display:block;margin:0 auto}.silt .k{font:2.2mm monospace}
+ .silt svg{width:28mm;height:28mm;display:block;margin:0 auto}
+ .krida{display:flex;gap:2mm;align-items:flex-start;margin:0 0 1.8mm;break-inside:avoid}.krida svg{display:block;flex:0 0 auto}.silt .k{font:2.2mm monospace}
  .plakat{text-align:center;font-family:Arial,sans-serif;page-break-after:always}.plakat svg{width:120mm;height:120mm}.plakat h1{font-size:12mm;margin:6mm 0 2mm}.plakat h2{font-size:9mm;margin:0 0 6mm}.plakat ol{text-align:left;font-size:5.5mm;max-width:160mm;margin:6mm auto}}
 </style></head><body><main id="m"><h1>Krativara haldus</h1>
 <div id="login" class="kaart"><label>Halduse võti (ADMIN_TOKEN)</label><input id="tok" type="password" autocomplete="current-password">
@@ -460,12 +463,16 @@ main{max-width:1100px}table{border-collapse:collapse;width:100%;background:#fff;
 <script nonce="${nonce}">${QR_JS}</script>
 <script nonce="${nonce}">
 ${ABI}
+${KLEEBIS_JS}
 let TOK='', U=null, TAB='ulevaade';
 try{TOK=localStorage.getItem('qw_admin')||sessionStorage.getItem('qw_admin')||'';}catch(e){}
 async function a(tee,keha){const r=await fetch('/api/admin/'+tee,keha?{method:'POST',headers:{'Authorization':'Bearer '+TOK,'Content-Type':'application/json'},body:JSON.stringify(keha)}:{headers:{'Authorization':'Bearer '+TOK}});
   let j={};try{j=await r.json()}catch(e){} if(r.status===401){$('#app').hidden=true;$('#login').hidden=false;} j.status=r.status; return j;}
 $('#sisse').onclick=async()=>{TOK=$('#tok').value.trim(); try{($('#mal').checked?localStorage:sessionStorage).setItem('qw_admin',TOK);}catch(e){} await lae();};
-async function lae(){U=await a('ulevaade'); if(!U.ok){$('#lviga').innerHTML='<div class="viga">'+esc(U.viga||'Viga')+'</div>';return;} $('#login').hidden=true;$('#app').hidden=false; tabs(); naita();}
+async function lae(){U=await a('ulevaade'); if(!U.ok){$('#lviga').innerHTML='<div class="viga">'+esc(U.viga||'Viga')+'</div>';return;} $('#login').hidden=true;$('#app').hidden=false; tabs(); naita();
+  seoHash();}
+function seoHash(){const h=/^#seo=([0-9A-Z]{12})$/.exec(location.hash); if(h){history.replaceState(null,'',location.pathname);TAB='seadmed';tabs();seoKood(h[1]);}}
+window.addEventListener('hashchange',()=>{if(U&&U.ok)seoHash();});
 const TABS={ulevaade:'Ülevaade',seadmed:'Seadmed',bron:'Broneeringud',kohad:'Töökohad',kasutajad:'Kasutajad',logi:'Logi',seaded:'Seaded'};
 // Täpp vahekaardil = üle vaatamata info: lahendamata vaidlused ja märkused, kinnitust ootavad kasutajad, aegunud taatlused,
 // uued broneeringud ja logikirjed pärast vahekaardi viimast avamist (meelespea selles brauseris).
@@ -516,7 +523,45 @@ function ulevaade(){
   nupp('[data-peata]',async e=>{const j=await a('kasutaja',{id:e.target.dataset.peata,olek:'blokeeritud'});j.ok?lae():alert(j.viga);});
 }
 
-function seadmed(muuda){
+// ---------- eeltrükitud koodid (partiid) ----------
+// Haldur otsustab iga seadme puhul: „Lisa seade“ tühja koodiga = uus kood ja oma silt (🖨 Sildid), või eeltrükitud kleebise kood.
+let PARTIID=[];
+async function laePartiid(){const j=await a('partiid');PARTIID=j.ok?j.partiid:[];return PARTIID;}
+const vabad=p=>p.koodid.filter(k=>!k.nimi).map(k=>k.kood);
+async function partiid(teade){
+  await laePartiid();
+  $('#sisu').innerHTML='<h2>📦 Eeltrükitud koodid (partiid)</h2><div class="kaart"><p class="vaike">Genereeri koodid ette, prindi või saada trükikotta. Kleebis pannakse seadmele ja seadme lisamisel sisestad (või valid) selle koodi väljale „Kood“. Sidumata koodi skännimisel näeb leidja „See kood ei ole veel kasutusel“.</p>'+
+   '<div class="vorm"><div><label>Kogus (1–200)</label><input id="p_n" type="number" min="1" max="200" value="24"></div><div><label>Märkus (valikuline)</label><input id="p_nimi" maxlength="60" placeholder="nt trükikoda nov 2026"></div></div><button class="roh" id="p_loo">Genereeri</button><div id="p_teade">'+(teade||'')+'</div></div>'+
+   (PARTIID.length?PARTIID.map(p=>{const v=vabad(p);return '<div class="kaart"><b>'+esc(aeg(p.aeg))+'</b>'+(p.nimi?' · '+esc(p.nimi):'')+' · koode '+p.koodid.length+', vabu <b>'+v.length+'</b>'+
+     '<div><button class="v" data-pa="silt" data-p="'+p.id+'">🖨 Krativara sildid (vabad)</button><button class="v" data-pa="kleebis" data-p="'+p.id+'">🖨 Kleebised 30×30 komplekt 1+3+2 (vabad)</button><button class="v" data-pa="svg" data-p="'+p.id+'">⬇ SVG (vabad)</button><button class="v" data-pa="csv" data-p="'+p.id+'">⬇ CSV</button></div>'+
+     '<details><summary>Koodid</summary><table><tr><th>Kood</th><th>Seade</th><th></th></tr>'+p.koodid.map(k=>'<tr><td class="vaike">'+k.kood+'</td><td>'+(k.nimi?esc(k.nimi)+' '+esc(k.invnr)+(k.kustutatud?' (kustutatud)':''):'<span class="vaike">vaba</span>')+'</td><td>'+(k.nimi?'':'<button class="v" data-seo="'+k.kood+'">Seo seadmega</button>')+'</td></tr>').join('')+'</table></details></div>';}).join(''):'<p class="vaike">Partiisid pole.</p>')+
+   '<button id="p_tagasi">← Seadmed</button>';
+  $('#p_tagasi').onclick=()=>seadmed();
+  $('#p_loo').onclick=async()=>{const j=await a('partii',{kogus:+$('#p_n').value,nimi:$('#p_nimi').value});
+    if(!j.ok){$('#p_teade').innerHTML='<div class="viga">'+esc(j.viga)+'</div>';return;} partiid('<div class="ok">Loodud '+j.partii.koodid.length+' koodi.</div>');};
+  document.querySelectorAll('[data-seo]').forEach(b=>b.onclick=()=>seoKood(b.dataset.seo));
+  document.querySelectorAll('[data-pa]').forEach(b=>b.onclick=()=>{const p=PARTIID.find(x=>x.id===b.dataset.p);if(!p)return;const v=vabad(p),act=b.dataset.pa;
+    if(act==='csv'){const r=['kood;url;seade;inventarinr'].concat(p.koodid.map(k=>[k.kood,qrUrl('S',k.kood),k.nimi||'',k.invnr||''].map(x=>/[;"\\n]/.test(x)?'"'+x.replace(/"/g,'""')+'"':x).join(';')));alla('koodid-'+p.aeg+'.csv','\\ufeff'+r.join('\\r\\n'),'text/csv');return;}
+    if(!v.length){alert('Vabu koode pole.');return;}
+    if(act==='silt')prindiSildid(v.map(k=>({kood:k,nimi:'',invnr:''})));
+    else if(act==='kleebis')prindiKleebised(v);
+    else alla('kleebised-'+p.aeg+'.svg',kleebisedSvg(v),'image/svg+xml');});
+}
+function seoKood(kood){seadmed(null,kood);}
+function alla(nimi,tekst,mime){const l=document.createElement('a'),u=URL.createObjectURL(new Blob([tekst],{type:mime}));l.href=u;l.download=nimi;document.body.appendChild(l);l.click();l.remove();setTimeout(()=>URL.revokeObjectURL(u),2000);}
+// Leiamindi kleebis (variant a: 30 × 30 mm, QR 19,9 mm): ühes reas 1 registrikleebis + 3 raamtekstiga + 2 tekstita, vahe 2 mm
+function qrM(url){const m=window.qrMatrix(url),n=m.length;let p='';for(let r=0;r<n;r++)for(let c=0;c<n;c++)if(m[r][c])p+='M'+c+' '+r+'h1v1h-1z';return {n:n,p:p};}
+const mmS=x=>String(+x.toFixed(3));
+function kRida(kood){const q=qrM(qrUrl('S',kood)),S=kleebisMoot(q,'a'),Sb=kleebisMoot(q,'a',true),rg=kleebisRegMoot(q,'a');
+  const osad=[[rg.W,rg.H,kleebisReg(q,kood,'a','')]];for(let i=0;i<3;i++)osad.push([S,S,kleebisSvg(q,kood,'a')]);for(let i=0;i<2;i++)osad.push([Sb,Sb,kleebisSvg(q,kood,'a',true)]);
+  return osad;}
+function prindiKleebised(koodid){
+  $('#print').innerHTML='<div class="kleeb">'+koodid.map(k=>'<div class="krida">'+kRida(k).map(([w,h,g])=>'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+mmS(w)+' '+mmS(h)+'" style="width:'+mmS(w)+'mm;height:'+mmS(h)+'mm">'+g+'</svg>').join('')+'</div>').join('')+'</div>';
+  window.print();}
+function kleebisedSvg(koodid){let y=0,W=0,g='';
+  koodid.forEach(k=>{let x=0,H=0;kRida(k).forEach(([w,h,s])=>{g+='<g transform="translate('+mmS(x)+' '+mmS(y)+')">'+s+'</g>';x+=w+2;H=Math.max(H,h);});W=Math.max(W,x-2);y+=H+2;});
+  return '<?xml version="1.0" encoding="UTF-8"?>\\n<svg xmlns="http://www.w3.org/2000/svg" width="'+mmS(W)+'mm" height="'+mmS(y-2)+'mm" viewBox="0 0 '+mmS(W)+' '+mmS(y-2)+'">'+g+'</svg>\\n';}
+function seadmed(muuda,seo){
   const s=muuda||{};
   $('#sisu').innerHTML='<h2>'+(muuda?'Muuda seadet':'Lisa seade')+'</h2><div class="kaart"><div class="vorm">'+
    '<div><label>Nimi *</label><input id="s_nimi" value="'+esc(s.nimi)+'"></div><div><label>Tüüp</label><input id="s_tyyp" value="'+esc(s.tyyp)+'" placeholder="nt nivelliir, laserkaugusmõõtja"></div>'+
@@ -525,20 +570,23 @@ function seadmed(muuda){
    '<div><label>Taatluse intervall (kuud, valikuline)</label><input id="s_intervall" type="number" min="1" max="120" value="'+esc(s.taatlus_intervall||'')+'"></div>'+
    '<div><label>Olek</label><select id="s_olek">'+Object.entries(OLEK).map(([k,t])=>'<option value="'+k+'"'+(s.olek===k?' selected':'')+'>'+t+'</option>').join('')+'</select></div>'+
    '<div><label>'+(muuda?'Koduladu':'Ladu, kus registreeritakse *')+'</label><select id="s_asukoht">'+kohaValik(s.koduladu)+'</select></div>'+
-   (muuda?'':'<div><label>Olemasolev kood (valikuline, 12 märki)</label><input id="s_kood" placeholder="tühi = uus kood"></div>')+
+   (muuda?'':'<div><label>Kood: tühi = uus kood (prindi silt) või eeltrükitud kleebise kood</label><input id="s_kood" list="s_vabad" value="'+esc(seo||'')+'" placeholder="tühi = uus kood"><datalist id="s_vabad"></datalist></div>')+
    '</div><label>Lisainfo (kasutajad näevad)</label><textarea id="s_lisa" rows="2">'+esc(s.lisainfo)+'</textarea>'+
    '<button class="roh" id="s_salv">'+(muuda?'Salvesta':'Lisa seade')+'</button> '+(muuda?'<button id="s_loobu">Loobu</button> <button id="s_ajalugu">Ajalugu</button>':'')+'<div id="s_teade"></div><div id="s_aj"></div></div>'+
    (muuda?'<h2>📏 Registreeri taatlus / kalibreerimine</h2><div class="kaart"><div class="vorm"><div><label>Kuupäev *</label><input type="date" id="t_kp"></div><div><label>Tunnistuse nr</label><input id="t_tun"></div>'+
      '<div><label>Tegija (labor)</label><input id="t_teg" value="'+esc(s.taatlus_tegija||'')+'"></div><div><label>Tulemus *</label><select id="t_tul"><option value="sobib">sobib</option><option value="ei_sobi">ei sobi (→ remonti)</option></select></div>'+
      '<div><label>Järgmine tähtaeg (tühi = kuupäev + intervall)</label><input type="date" id="t_j"></div></div><input id="t_mark" placeholder="Märkus (valikuline)" maxlength="300">'+
      '<button class="roh" id="t_salv">Salvesta taatlus</button> <button id="t_oleku">Saada taatlusele (olek)</button><div id="t_teade"></div><div id="t_ajalugu"></div></div>':'')+
-   '<h2>Seadmed ('+U.seadmed.length+')</h2><div class="rida"><input id="filter" placeholder="Filtreeri"><button id="prindi" style="flex:0 0 auto">🖨 Sildid</button><button id="kataloog" style="flex:0 0 auto">📖 Kataloog</button></div><p class="vaike">Sildid (seadme QR) kleebitakse seadmele. Kataloog (eraldi QR, ainult otsinguks) pannakse lattu; sellega ei saa seadet võtta.</p>'+
+   '<h2>Seadmed ('+U.seadmed.length+')</h2><div class="rida"><input id="filter" placeholder="Filtreeri"><button id="prindi" style="flex:0 0 auto">🖨 Sildid</button><button id="kataloog" style="flex:0 0 auto">📖 Kataloog</button><button id="partiid" style="flex:0 0 auto">📦 Eeltrükitud koodid</button></div><p class="vaike">Sildid (seadme QR) kleebitakse seadmele. Kataloog (eraldi QR, ainult otsinguks) pannakse lattu; sellega ei saa seadet võtta.</p>'+
    '<table id="st"><tr><th><input type="checkbox" id="koik" style="width:auto"></th><th>Nimi</th><th>Inv/seeria</th><th>Taatlus</th><th>Olek</th><th>Kellel / asukoht</th><th>Kood</th><th></th></tr>'+
    U.seadmed.map(x=>'<tr data-kood="'+x.kood+'"'+kustStiil(x)+'><td><input type="checkbox" class="vali" value="'+x.kood+'" style="width:auto"></td><td><a href="#" data-muuda="'+x.kood+'">'+esc(x.nimi)+'</a><br><span class="vaike">'+esc(x.tyyp)+'</span></td><td>'+esc(x.invnr)+'<br><span class="vaike">'+esc(x.seerianr)+'</span></td><td>'+esc(x.taatlus_kuni||'')+'</td><td>'+OLEK[x.olek]+'</td><td>'+(x.kellel?esc(x.kellel.nimi):esc(x.asukoht_nimi))+'</td><td class="vaike">'+x.kood+'</td><td>'+kustNupp('seade',x.kood,x)+'</td></tr>').join('')+'</table>'+
    '<p><button id="csv">⬇ Seadmed CSV</button></p>';
   $('#s_salv').onclick=async()=>{const j=await a('seade',{kood:muuda?muuda.kood:undefined,uus_kood:$('#s_kood')?$('#s_kood').value.trim():undefined,nimi:$('#s_nimi').value,tyyp:$('#s_tyyp').value,invnr:$('#s_invnr').value,seerianr:$('#s_seerianr').value,taatlus_kuni:$('#s_taatlus').value,taatlus_intervall:$('#s_intervall').value,olek:$('#s_olek').value,asukoht:$('#s_asukoht').value,lisainfo:$('#s_lisa').value});
     if(!j.ok){$('#s_teade').innerHTML='<div class="viga">'+esc(j.viga)+'</div>';return;} U=await a('ulevaade'); seadmed(); $('#s_teade').innerHTML='<div class="ok">Salvestatud: '+esc(j.seade.nimi)+' ('+j.seade.kood+')</div>';};
   if($('#s_loobu'))$('#s_loobu').onclick=()=>seadmed();
+  $('#partiid').onclick=()=>partiid();
+  if(!muuda)laePartiid().then(l=>{const d=$('#s_vabad');if(d)d.innerHTML=l.flatMap(vabad).map(k=>'<option value="'+k+'">').join('');});
+  if(seo){$('#s_kood').scrollIntoView();$('#s_nimi').focus();}
   if($('#t_salv')){
     const lae_t=async()=>{const j=await a('taatlused?kood='+muuda.kood);$('#t_ajalugu').innerHTML=(j.taatlused||[]).length?'<table><tr><th>Kuupäev</th><th>Tulemus</th><th>Tunnistus</th><th>Tegija</th><th>Järgmine</th></tr>'+j.taatlused.map(t=>'<tr><td>'+esc(t.kuupaev)+'</td><td>'+(t.tulemus==='sobib'?'sobib':'<b>ei sobi</b>')+'</td><td>'+esc(t.tunnistus)+'</td><td>'+esc(t.tegija)+'</td><td>'+esc(t.jargmine||'')+'</td></tr>').join('')+'</table>':'<p class="vaike">Taatlusi pole registreeritud.</p>';};
     lae_t();

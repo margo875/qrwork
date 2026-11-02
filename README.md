@@ -41,6 +41,15 @@ Cloudflare Worker + üks Durable Object (SQLite), sõltuvusi pole. Lähtekoht on
 6. Haldus → Seaded → **🔔 Saada testteade**: näitab Telegrami/ntfy tulemust ja vea põhjust vihjega (nt „chat not found → ava bot ja vajuta Start“), tokenit ei näidata.
 - Kõik piirid on DO-s (üks eksemplar, täpsed), Cloudflare'i Rate Limiting bindingut pole vaja. Mälus olevad loendurid nullitakse DO taaskäivitusel.
 
+## Eeltrükitud koodid ja seadme kood (0.5.0, Margo 02.11.2026)
+Haldur otsustab iga seadme puhul ise:
+- **Uus kood ja oma silt:** Seadmed → „Lisa seade“, väli „Kood“ tühi → kood tekib, prindi 🖨 Sildid (32 × 44 mm, nimi + inventarinr).
+- **Varem trükitud kleebis:** Seadmed → 📦 **Eeltrükitud koodid** → kogus 1–200 → Genereeri. Partii on üks kirje (`partii:<aeg>`), lisaks iga koodi kohta indeks `pkood:<kood>`. Printimine (ainult vabad koodid): Krativara sildid (nimi tühi, käsitsi kirjutamiseks) või leiamindi **kleebis 30 × 30 mm „TEATA LEIUST“, komplekt 1 + 3 + 2** (registrikleebis kirjutusjoonega + 3 raamtekstiga + 2 tekstita; QR 19,9 mm). Trükikojale **SVG** (vektor) või A4 „Salvesta PDF-ina“ 100 % mõõtkavaga; CSV ainult enda arvestuseks.
+- **Sidumine:** seadme lisamisel kirjuta või vali (loend pakub vabu) kleebise kood väljale „Kood“, või partii loendis „Seo seadmega“. Sidumata koodi skännimisel näeb leidja „See kood ei ole veel kasutusel“ (teadet ei saadeta) ja lingi „Haldur: seo kood seadmega“ → `/admin#seo=<kood>` avab seadme lisamise vormi selle koodiga.
+- Olemasoleva seadme koodi ei vahetata (ajalugu, laenud ja broneeringud on koodi küljes); kahjustunud sildi asemele prindi sama koodiga uus silt.
+- Lõplikult kustutatud seadme partiikood muutub uuesti vabaks.
+- QR: `HTTPS://QRP.KRATIVARA.EE/S/<12 märki>` = 39 märki, alfanumeeriline režiim, **versioon 3-Q (29 × 29)** (testis kontrollitud). Trükiproov enne partii tellimist.
+
 ## Inventarinumber, superkasutaja ja kataloog (Margo 01.11.2026)
 - **Inventarinumber** tekib uuele seadmele automaatselt: `<lao lühend>-<AAKK><järjekorranumber>`, nt `L1-2611001` = ladu L1, 2026 november, 1. seade. Järjekord algab igas laos iga kuu alguses 001-st. Lao lühend (L1, L2…) antakse automaatselt, haldur võib selle muuta (1–6 tähte/numbrit, unikaalne). Olemasoleva numbriga seadmele võib numbri käsitsi sisestada. Uue seadme lisamisel on ladu kohustuslik.
 - **Tavakasutaja** ei näe seadmete loendit: „Kus on seade?“ näitab tulemusi alles vähemalt 2 märgi järel või QR-koodi skännimisel.

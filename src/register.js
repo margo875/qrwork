@@ -21,7 +21,8 @@ const ID_RE = /^[0-9A-HJKMNP-TV-Z]{10}$/;
 const TS_MAX = 9999999999999;
 const SESS_MS = 180 * 24 * 3600 * 1000;
 const LAHTESTUS_MS = 24 * 3600 * 1000;
-const PARTII_MAX = 30;              // seadmeid ühes võtmises/tagastuses
+const PARTII_MAX = 30;
+const PARTII_KOODE = 200;           // eeltrükitud koode ühes partiis              // seadmeid ühes võtmises/tagastuses
 export const MARKE_TYYBID = {
   ei_toota: 'Ei tööta',
   taatlus: 'Vajab taatlemist / kalibreerimist',
@@ -738,7 +739,12 @@ export class Register {
   }
   async avalik(request, { kood }) {
     const l = await this.leidSeade(kood);
-    if (!l) return viga('Tundmatu kood.', 404);
+    if (!l) {
+      // Eeltrükitud (partii) kood, mis pole veel seadmega seotud: ei tokenit ega teadet
+      const kk = normKood(kood);
+      if (kk && await this.s.get(`pkood:${kk}`) && !(await this.s.get(`seade:${kk}`))) return viga('See kood ei ole veel kasutusel.', 404, { sidumata: true });
+      return viga('Tundmatu kood.', 404);
+    }
     const { kk, s } = l;
     const seaded = await this.seaded();
     const token = await looToken(this.env, kk);
@@ -883,6 +889,38 @@ export class Register {
     return json({ ok: true, salvestatud: v.logi, teavitatud: v.teade });
   }
 
+  // ---------- eeltrükitud koodid (partiid) ----------
+  // Haldur valib iga seadme puhul: uus kood ja oma silt (vana viis) või varem trükitud kleebise kood (seadme lisamisel „Olemasolev kood“).
+  // partii:<inv(aeg)> = {aeg, nimi, koodid[]} (üks kirje partii kohta), pkood:<kood> = {partii} (sidumata koodi äratundmiseks skännimisel).
+  async uusPartii(b) {
+    const n = Number(b.kogus);
+    if (!Number.isInteger(n) || n < 1 || n > PARTII_KOODE) return viga(`Kogus 1–${PARTII_KOODE}.`);
+    const nyyd = Date.now(), koodid = [];
+    while (koodid.length < n) {
+      const k = juhuslik(12);
+      if (koodid.includes(k) || await this.s.get(`seade:${k}`) || await this.s.get(`koht:${k}`) || await this.s.get(`pkood:${k}`)) continue;
+      koodid.push(k);
+    }
+    const id = `partii:${inv(nyyd)}`;
+    const p = { aeg: nyyd, nimi: puhasta(b.nimi, 60), koodid };
+    await this.s.put(id, p);
+    for (const k of koodid) await this.s.put(`pkood:${k}`, { partii: id });
+    await this.logi({ tyyp: 'partii_loodud', nimi: 'haldur', marge: `${n} koodi${p.nimi ? `: ${p.nimi}` : ''}` });
+    return json({ ok: true, partii: { id, ...p } });
+  }
+  async partiid() {
+    const l = [];
+    for (const [id, p] of await this.loend('partii:')) {
+      const koodid = [];
+      for (const k of p.koodid) {
+        const sd = await this.s.get(`seade:${k}`);
+        koodid.push(sd ? { kood: k, nimi: sd.nimi, invnr: sd.invnr || '', kustutatud: !!sd.kustutatud } : { kood: k });
+      }
+      l.push({ id, aeg: p.aeg, nimi: p.nimi || '', koodid });
+    }
+    return l;
+  }
+
   // ---------- haldus ----------
   async admin(request, tee, url) {
     const ip = request.headers.get('X-IP-Rasi') || '';
@@ -895,6 +933,7 @@ export class Register {
       if (tee === 'logi') return json({ ok: true, logi: await this.logiLoe(url.searchParams.get('kood'), 300) });
       if (tee === 'seadmed.csv') return this.seadmedCsv();
       if (tee === 'logi.csv') return this.logiCsv();
+      if (tee === 'partiid') return json({ ok: true, partiid: await this.partiid() });
       if (tee === 'taatlused') { const kk = normKood(url.searchParams.get('kood') || ''); return json({ ok: true, taatlused: kk ? (await this.loend(`taatlus:${kk}:`, 50)).map(([, x]) => x) : [] }); }
       if (tee === 'foto') {
         const v = url.searchParams.get('k') || '';
@@ -918,6 +957,7 @@ export class Register {
       case 'marge-lahenda': return this.adminLahenda('marge:', b);
       case 'vaidlus-lahenda': return this.adminLahenda('vaidlus:', b);
       case 'seaded': return this.adminSeaded(b);
+      case 'partii': return this.uusPartii(b);
       case 'testteade': { // testteade Telegrami/ntfy-sse; vea põhjus tagasi halduse lehele (tokenit ei näidata)
         const t = await teavita(this.env, `✅ Krativara testteade (${eestiAeg(Date.now())})`);
         return json({ ok: t.saadetud > 0, saadetud: t.saadetud, tg: t.tg, ntfy: t.ntfy });
