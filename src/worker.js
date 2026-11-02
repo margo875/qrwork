@@ -1,29 +1,39 @@
 // QR-töökoht: Cloudflare Worker. Lehed ja staatika serveerib Worker, kõik andmed ja reeglid on Durable Objectis
 // Register (src/register.js). Sõltuvusi pole.
 import { Register } from './register.js';
-import { appLeht, adminLeht } from './lehed.js';
+import { appLeht, adminLeht, devLeht } from './lehed.js';
 import { JSQR_JS } from './jsqr.js';
+import { IKOON_192, IKOON_512, IKOON_180 } from './ikoonid.js';
+import { VERSIOON } from './versioon.js';
 
 export { Register };
 
 const BOT_UA = /\b(bot|crawler|spider|slurp|facebookexternalhit|whatsapp|telegram|slack|discord|preview|skype|linkedin|bingpreview|google-?inspectiontool)\b/i;
 
+// Versioon: VERSIOON (käsitsi, src/versioon.js) + deploy'i id (CF_VERSION, wrangler.toml [version_metadata]; muutub iga deploy'ga)
+export const versioon = (env) => ({ v: VERSIOON, id: String(env.CF_VERSION?.id || '').slice(0, 8) });
+const MANIFEST = JSON.stringify({
+  name: 'Krativara', short_name: 'Krativara', lang: 'et', start_url: '/', scope: '/', display: 'standalone',
+  background_color: '#f3f4f6', theme_color: '#1d4ed8',
+  icons: [{ src: '/ikoon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any maskable' }, { src: '/ikoon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' }],
+});
+const IKOONID = { '/ikoon-192.png': IKOON_192, '/ikoon-512.png': IKOON_512, '/apple-touch-icon.png': IKOON_180 };
+const png = (b64) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
-    // Domeenivahetus: kui PEA_HOST on seatud (wrangler.toml [vars]), suunatakse kõik teised domeenid sinna sama teega.
-    // GET 301, muud 308 (meetod ja keha säilivad). Vanad kleebised (nt kratt.kindavel.ee) töötavad edasi.
-    if (env.PEA_HOST && url.hostname !== env.PEA_HOST && url.hostname !== 'localhost' && url.hostname !== '127.0.0.1') {
-      const uus = new URL(url.pathname + url.search, `https://${env.PEA_HOST}`);
-      const kood = request.method === 'GET' || request.method === 'HEAD' ? 301 : 308;
-      return new Response(null, { status: kood, headers: { Location: uus.toString(), 'Cache-Control': 'no-store' } });
-    }
     const tee = url.pathname;
     const m = /^\/([SKIski])\/([0-9A-Za-z]{12})\/?$/.exec(tee);
     if (request.method === 'GET' || request.method === 'HEAD') {
-      if (tee === '/' || tee === '/index.html') return html(appLeht);
-      if (m) return html(appLeht, { [{ S: 'seade', K: 'koht', I: 'info' }[m[1].toUpperCase()]]: m[2].toUpperCase() });
-      if (tee === '/admin') return html(adminLeht);
+      const ver = versioon(env);
+      if (tee === '/' || tee === '/index.html') return html(appLeht, { ver });
+      if (m) return html(appLeht, { ver, [{ S: 'seade', K: 'koht', I: 'info' }[m[1].toUpperCase()]]: m[2].toUpperCase() });
+      if (tee === '/admin') return html(adminLeht, { ver });
+      if (tee === '/dev') return html(devLeht, { ver });
+      if (tee === '/api/versioon') return new Response(JSON.stringify(ver), { headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' } });
+      if (tee === '/manifest.webmanifest') return new Response(MANIFEST, { headers: { 'Content-Type': 'application/manifest+json; charset=utf-8', 'Cache-Control': 'public, max-age=3600' } });
+      if (IKOONID[tee]) return new Response(png(IKOONID[tee]), { headers: { 'Content-Type': 'image/png', 'Cache-Control': 'public, max-age=86400' } });
       if (tee === '/jsqr.js') return new Response(JSQR_JS, { headers: { 'Content-Type': 'text/javascript; charset=utf-8', 'Cache-Control': 'public, max-age=86400', 'X-Content-Type-Options': 'nosniff' } });
       if (tee === '/robots.txt') return new Response('User-agent: *\nDisallow: /\n', { headers: { 'Content-Type': 'text/plain' } });
     }
@@ -62,7 +72,7 @@ function html(leht, andmed = {}) {
     headers: {
       'Content-Type': 'text/html; charset=utf-8',
       'Cache-Control': 'no-store',
-      'Content-Security-Policy': `default-src 'none'; script-src 'nonce-${nonce}'; style-src 'unsafe-inline'; connect-src 'self'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`,
+      'Content-Security-Policy': `default-src 'none'; script-src 'nonce-${nonce}'; style-src 'unsafe-inline'; connect-src 'self'; manifest-src 'self'; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`,
       'X-Frame-Options': 'DENY',
       'X-Content-Type-Options': 'nosniff',
       'Referrer-Policy': 'no-referrer',

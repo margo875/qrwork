@@ -108,6 +108,7 @@ function kypsis(request, nimi) {
   }
   return null;
 }
+const VEALOGI_MAX = 500, VEALOGI_AEG = 30 * 86400000;
 const json = (obj, status = 200, lisa = {}) => new Response(JSON.stringify(obj), {
   status, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...lisa },
 });
@@ -252,6 +253,7 @@ export class Register {
     const tee = url.pathname;
     try {
       if (tee.startsWith('/api/admin/')) return await this.admin(request, tee.slice(11), url);
+      if (tee.startsWith('/api/dev/')) return await this.dev(request, tee.slice(9));
       const ics = /^\/api\/kalender\/([0-9A-Z]{32})\.ics$/.exec(tee);
       if (ics && request.method === 'GET') return await this.kalender(ics[1]);
       if (request.method !== 'POST') return viga('meetod', 405);
@@ -268,6 +270,7 @@ export class Register {
         case '/api/parool': return await this.parooliTaastus(keha, ip);
         case '/api/avalik': return await this.avalik(keha);
         case '/api/leid': return await this.leid(request, keha);
+        case '/api/viga': return await this.kliendiViga(keha, ip);
       }
       const k = await this.kasutaja(request);
       if (!k) return viga('Logi sisse', 401);
@@ -289,8 +292,49 @@ export class Register {
       return viga('tundmatu tee', 404);
     } catch (e) {
       console.error('qrwork viga', e && e.stack || e);
+      try { await this.veaLogi({ liik: 'server', teade: String(e && e.message || e), stack: String(e && e.stack || ''), leht: tee }); } catch (e2) { /* logi ei tohi päringut murda */ }
       return viga('serveri viga', 500);
     }
+  }
+
+  // ---------- tehniline vealogi (ainult arendajale) ----------
+  // viga:<inv(aeg)>:<r>  {aeg, liik, teade, stack, leht, fail, rida, veerg, v, id, ua}; säilib 30 päeva, kuni 500 kirjet.
+  // Kasutaja id-d, nime, telefoni ega IP-d ei salvestata.
+  async veaLogi(o, nyyd = Date.now()) {
+    const t = (x, n) => String(x == null ? '' : x).replace(/[\u0000-\u0008\u000b-\u001f]/g, '').slice(0, n);
+    const k = {
+      aeg: nyyd, liik: o.liik === 'server' ? 'server' : 'klient', teade: t(o.teade, 500), stack: t(o.stack, 2000),
+      leht: t(String(o.leht || '').split(/[?#]/)[0], 100), fail: t(String(o.fail || '').split(/[?#]/)[0], 200),
+      rida: Number(o.rida) | 0, veerg: Number(o.veerg) | 0, v: t(o.v, 20), id: t(o.id, 20), ua: t(o.ua, 300),
+    };
+    await this.s.put(`viga:${inv(nyyd)}:${juhuslik(4)}`, k);
+    const vead = await this.loend('viga:');
+    for (const [i, [voti, x]] of vead.entries()) if (i >= VEALOGI_MAX || nyyd - (x?.aeg || 0) > VEALOGI_AEG) await this.s.delete(voti);
+  }
+  async kliendiViga(keha, ip) {
+    // Piir: 20 kirjet tunnis IP kohta, 200 tunnis kokku (logi ei saa üle ujutada)
+    if (this.piiratud(`vigaip:${ip}`, 20, 3600000) || this.piiratud('vigakokku', 200, 3600000)) return json({ ok: true });
+    this.viga(`vigaip:${ip}`); this.viga('vigakokku');
+    if (!keha.teade) return json({ ok: true });
+    await this.veaLogi({ ...keha, liik: 'klient' });
+    return json({ ok: true });
+  }
+  async dev(request, tee) {
+    const ip = request.headers.get('X-IP-Rasi') || '';
+    if (this.piiratud(`dev:${ip}`, 10)) return viga('Liiga palju vigaseid katseid.', 429);
+    const tok = this.env.DEV_TOKEN;
+    const auth = request.headers.get('Authorization') || '';
+    if (!tok || tok.length < 16 || !vordle(auth, `Bearer ${tok}`)) { this.viga(`dev:${ip}`); return viga(tok ? 'Vale arendaja võti.' : 'DEV_TOKEN pole seadistatud.', 401); }
+    if (request.method === 'GET' && tee === 'vead') {
+      const nyyd = Date.now();
+      const vead = (await this.loend('viga:')).map(([, x]) => x).filter((x) => nyyd - x.aeg <= VEALOGI_AEG).map((x) => ({ ...x, aeg_tekst: eestiAeg(x.aeg) }));
+      return json({ ok: true, vead });
+    }
+    if (request.method === 'POST' && tee === 'tyhjenda') {
+      for (const [voti] of await this.loend('viga:')) await this.s.delete(voti);
+      return json({ ok: true });
+    }
+    return viga('tundmatu', 404);
   }
 
   // Lehe avamine: töökoha nimi (kui QR-ist tuli kood) ja kasutaja (kui sessioon kehtib)

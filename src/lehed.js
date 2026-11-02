@@ -5,12 +5,10 @@ import { QR_JS } from './qrgen.js';
 
 // Skännitud QR teksti tõlgendus. Kehtib ainult sama hosti /S/<kood> (seade) või /K/<kood> (töökoht).
 // Funktsioon läheb lehele .toString() abil, seega sama kood töötab brauseris ja testides.
-// host: oma domeen või domeenide loend (uus + vana, et vanad kleebised töötaksid ka pärast domeenivahetust)
 export function koodTekstist(t, host) {
   t = String(t || '').trim();
   const m = /^https?:\/\/([^/?#\s]+)\/([SKI])\/([0-9A-Z]{12})\/?$/i.exec(t);
-  const hostid = (Array.isArray(host) ? host : [host]).map((h) => String(h || '').toLowerCase());
-  if (!m || !hostid.includes(m[1].toLowerCase())) return null;
+  if (!m || m[1].toLowerCase() !== String(host || '').toLowerCase()) return null;
   return { liik: m[2].toUpperCase(), kood: m[3].toUpperCase() };
 }
 export function kasitsiKood(v) {
@@ -24,8 +22,6 @@ const paevi=t=>Math.floor((Date.now()-t)/86400000);
 const NONCE=document.currentScript.nonce;
 function laeSkript(src){return new Promise((ok,ei)=>{const s=document.createElement('script');s.src=src;s.nonce=NONCE;s.onload=ok;s.onerror=ei;document.head.appendChild(s);});}`;
 
-// Kõik selle rakenduse domeenid (kleebistel olevad QR-id jäävad kehtima). Uus domeen lisatakse siia ja wrangler.toml-i.
-export const OMA_HOSTID = ['kratt.kindavel.ee', 'krativara.ee', 'www.krativara.ee'];
 const STIIL = `*{box-sizing:border-box}body{font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;margin:0;background:#f3f4f6;color:#111}
 main{max-width:640px;margin:0 auto;padding:16px}h1{font-size:1.35rem;margin:.2rem 0 .6rem}h2{font-size:1.1rem;margin:1.2rem 0 .5rem}
 .kaart{background:#fff;border-radius:12px;padding:14px;margin:10px 0;box-shadow:0 1px 3px rgba(0,0,0,.08)}
@@ -39,17 +35,47 @@ ul.loend{list-style:none;padding:0;margin:0}ul.loend li{background:#fff;border-r
 video{width:100%;max-height:45vh;background:#000;border-radius:12px;object-fit:cover}.rida{display:flex;gap:8px;align-items:center}.rida>*{flex:1;min-width:0}
 .tabs{display:flex;gap:6px;margin:8px 0}.tabs button{flex:1}.tabs .val{background:#1d4ed8;color:#fff}a{color:#1d4ed8}
 .mark{display:flex;gap:8px;align-items:flex-start;margin:6px 0}.mark input{width:auto;margin-top:4px}
+#uusver{position:fixed;left:0;right:0;bottom:0;z-index:50;background:#1d4ed8;color:#fff;padding:10px 16px;text-align:center}#uusver button{margin-left:8px;background:#fff;color:#1d4ed8;width:auto}
+#jalus{color:#6b7280;font-size:.8rem;text-align:center;padding:16px 16px 60px}#jalus button{width:auto;padding:4px 10px;font-size:.8rem}
 .tapp{display:inline-block;min-width:1.3em;padding:0 .35em;border-radius:1em;background:#dc2626;color:#fff;font-size:.75rem;line-height:1.3em;text-align:center;font-weight:700}`;
 
-export function appLeht(nonce, { seade = '', koht = '', info = '' } = {}) {
+// Kõigil lehtedel: tehniline vealogi (ainult arendajale, /dev), „uus versioon“ riba, jalus versiooniga ja avakuvale lisamine.
+// Vealogisse ei saadeta kasutaja andmeid: ainult veateade, fail/rida, lehe tee (ilma päringuta), versioon, brauser.
+function lisaJs(nonce, ver) {
+  return `<script nonce="${nonce}">
+(function(){
+const VER=${JSON.stringify(ver || { v: '', id: '' })};
+const e2=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let n=0;
+function saada(o){if(++n>10)return;try{fetch('/api/viga',{method:'POST',headers:{'Content-Type':'application/json','X-QW':'1'},credentials:'same-origin',keepalive:true,
+  body:JSON.stringify(Object.assign(o,{leht:location.pathname,v:VER.v,id:VER.id,ua:navigator.userAgent}))}).catch(function(){});}catch(e){}}
+window.addEventListener('error',function(e){saada({liik:'klient',teade:String(e.message||'viga'),fail:String(e.filename||''),rida:e.lineno||0,veerg:e.colno||0,stack:String(e.error&&e.error.stack||'')});});
+window.addEventListener('unhandledrejection',function(e){const r=e.reason;saada({liik:'klient',teade:'Promise: '+String(r&&r.message||r),stack:String(r&&r.stack||'')});});
+let rb=false;
+function riba(){if(rb)return;rb=true;const d=document.createElement('div');d.id='uusver';d.innerHTML='Uus versioon on saadaval. <button id="uv_b">Värskenda</button>';document.body.appendChild(d);document.getElementById('uv_b').onclick=function(){location.reload();};}
+async function kontrolli(){try{const r=await fetch('/api/versioon',{cache:'no-store'});const j=await r.json();if(j.v!==VER.v||(j.id&&VER.id&&j.id!==VER.id))riba();}catch(e){}}
+setInterval(kontrolli,5*60*1000);
+document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible')kontrolli();});
+let ip=null;
+window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();ip=e;jalus();});
+function jalus(){let f=document.getElementById('jalus');if(!f){f=document.createElement('footer');f.id='jalus';document.body.appendChild(f);}
+  const app=matchMedia('(display-mode: standalone)').matches||navigator.standalone===true;
+  const ios=/iPhone|iPad|iPod/.test(navigator.userAgent);
+  f.innerHTML='Krativara v'+e2(VER.v)+(VER.id?' ('+e2(VER.id)+')':'')+(app?'':ip?' · <button id="lisa_av">Lisa avakuvale</button>':ios?' · Avakuvale: Jaga → Lisa avakuvale':'');
+  const b=document.getElementById('lisa_av');if(b)b.onclick=async function(){ip.prompt();try{await ip.userChoice;}catch(e){}ip=null;jalus();};}
+jalus();
+})();
+</script>`;
+}
+
+export function appLeht(nonce, { seade = '', koht = '', info = '', ver } = {}) {
   return `<!doctype html><html lang="et"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex"><title>Krativara</title><style>${STIIL}</style></head>
+<meta name="robots" content="noindex"><title>Krativara</title><link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#1d4ed8"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><style>${STIIL}</style></head>
 <body><main id="sisu"><p>Laen…</p></main>
 <script nonce="${nonce}">
 ${ABI}
 ${koodTekstist.toString()}
 ${kasitsiKood.toString()}
-const HOSTID=[location.host,...${JSON.stringify(OMA_HOSTID)}];
 const URL_SEADE=${JSON.stringify(seade)}, URL_KOHT=${JSON.stringify(koht)}, URL_INFO=${JSON.stringify(info)};
 let S={firma:'',koht:null,mina:null};
 const LS={get(k){try{return localStorage.getItem(k)||''}catch(e){return ''}},set(k,v){try{localStorage.setItem(k,v)}catch(e){}}};
@@ -226,7 +252,7 @@ function skanner(reziim){
     if(navigator.vibrate)navigator.vibrate(80);
     valik.push({kood,info:j,ule:false,teise:false}); teade('Lisatud: '+j.seade.nimi,'ok'); joonista();
   };
-  const tekstist=t=>{const k=koodTekstist(t,HOSTID);
+  const tekstist=t=>{const k=koodTekstist(t,location.host);
     if(!k){teade('Tundmatu QR-kood. Pöördu administraatori poole.');if(navigator.vibrate)navigator.vibrate([200,100,200]);return;}
     if(k.liik==='K'){teade('See on töökoha QR-kood. Skänni seadmel olevat koodi.','hoiatus');return;}
     if(k.liik==='I'){teade('See on kataloogi QR-kood (ainult otsinguks). Skänni seadmel olevat koodi.','hoiatus');return;}
@@ -309,7 +335,7 @@ function otsing(){
    '<div id="kaam" hidden><video id="vid" muted playsinline></video><div id="teade"></div></div><div id="tul"></div><button class="suur" id="tagasi">Tagasi</button>');
   $('#tagasi').onclick=()=>pohi();
   $('#qr').onclick=()=>{ if(toimib){peata();$('#kaam').hidden=true;return;} $('#kaam').hidden=false;
-    kaamera($('#vid'),t=>{const k=koodTekstist(t,HOSTID);
+    kaamera($('#vid'),t=>{const k=koodTekstist(t,location.host);
       if(!k||k.liik==='K'){$('#teade').innerHTML='<div class="viga">'+(k?'See on töökoha QR-kood.':'Tundmatu QR-kood. Pöördu administraatori poole.')+'</div>';if(navigator.vibrate)navigator.vibrate([200,100,200]);return;}
       peata(); seadmeVaade(k.kood,false);},t=>{$('#teade').innerHTML='<div class="hoiatus">'+esc(t)+'</div>';}); };
   let t=null; const otsi=async()=>{const j=await api('/api/otsi',{q:$('#q').value}); if(!j.ok){$('#tul').innerHTML='<div class="viga">'+esc(j.viga)+'</div>';return;}
@@ -351,12 +377,12 @@ async function leidjaVaade(kood){
     const r=await api('/api/leid',{kood,tekst:$('#tekst').value,kontakt:$('#kontakt').value,lat:pos?pos.latitude:undefined,lon:pos?pos.longitude:undefined,tapsus:pos?pos.accuracy:undefined});
     $('#teade').innerHTML=r.ok?'<div class="ok">Aitäh! Teade saadeti'+(pos?' koos asukohaga':'')+'.</div>':'<div class="viga">'+esc(r.viga||'Saatmine ebaõnnestus')+'</div>'; $('#saada').disabled=!!r.ok?true:false; if(!r.ok)$('#saada').disabled=false;};
 }
-</script></body></html>`;
+</script>${lisaJs(nonce, ver)}</body></html>`;
 }
 
-export function adminLeht(nonce) {
+export function adminLeht(nonce, { ver } = {}) {
   return `<!doctype html><html lang="et"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex"><title>Krati haldus</title><style>${STIIL}
+<meta name="robots" content="noindex"><title>Krativara haldus</title><style>${STIIL}
 main{max-width:1100px}table{border-collapse:collapse;width:100%;background:#fff;font-size:.9rem}td,th{border-bottom:1px solid #e5e7eb;padding:6px;text-align:left;vertical-align:top}
 .tabs{flex-wrap:wrap}.tabs button{flex:0 0 auto}.vana{background:#fee2e2}button.v{padding:6px 10px;font-size:.85rem;margin:2px}
 .vorm{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:0 12px}
@@ -365,7 +391,7 @@ main{max-width:1100px}table{border-collapse:collapse;width:100%;background:#fff;
  .sildid{display:flex;flex-wrap:wrap;gap:3mm}.silt{width:32mm;height:44mm;border:0.2mm dashed #999;padding:1mm;text-align:center;font:bold 2.6mm/1.15 Arial,sans-serif;overflow:hidden;break-inside:avoid}
  .silt svg{width:28mm;height:28mm;display:block;margin:0 auto}.silt .k{font:2.2mm monospace}
  .plakat{text-align:center;font-family:Arial,sans-serif;page-break-after:always}.plakat svg{width:120mm;height:120mm}.plakat h1{font-size:12mm;margin:6mm 0 2mm}.plakat h2{font-size:9mm;margin:0 0 6mm}.plakat ol{text-align:left;font-size:5.5mm;max-width:160mm;margin:6mm auto}}
-</style></head><body><main id="m"><h1>Krati haldus</h1>
+</style></head><body><main id="m"><h1>Krativara haldus</h1>
 <div id="login" class="kaart"><label>Halduse võti (ADMIN_TOKEN)</label><input id="tok" type="password" autocomplete="current-password">
 <label class="mark"><input type="checkbox" id="mal"><span>Jäta selles brauseris meelde</span></label><button class="sin" id="sisse">Ava</button><div id="lviga"></div></div>
 <div id="app" hidden><div class="tabs" id="tabs"></div><div id="sisu"></div></div></main><div id="print"></div>
@@ -519,5 +545,27 @@ function seaded(){const s=U.seaded;
 }
 async function lae_alla(nimi){const r=await fetch('/api/admin/'+nimi,{headers:{'Authorization':'Bearer '+TOK}});if(!r.ok){alert('Viga');return;}const b=await r.blob();const u=URL.createObjectURL(b);const l=document.createElement('a');l.href=u;l.download=nimi;document.body.appendChild(l);l.click();l.remove();setTimeout(()=>URL.revokeObjectURL(u),2000);}
 if(TOK) lae();
-</script></body></html>`;
+</script>${lisaJs(nonce, ver)}</body></html>`;
+}
+
+// Arendaja vealogi (/dev): võti DEV_TOKEN (Cloudflare'i saladus, ≥ 16 märki). Haldur (ADMIN_TOKEN) seda ei näe.
+export function devLeht(nonce, { ver } = {}) {
+  return `<!doctype html><html lang="et"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex"><title>Krativara vealogi</title><style>${STIIL}
+.vk{background:#fff;border-radius:8px;padding:8px 10px;margin:6px 0;font-size:.85rem;word-break:break-word}.vk pre{white-space:pre-wrap;font-size:.75rem;margin:4px 0 0}</style></head>
+<body><main><h1>Vealogi</h1>
+<div id="login" class="kaart"><label>Arendaja võti (DEV_TOKEN)</label><input id="tok" type="password" autocomplete="current-password"><button class="sin" id="sisse">Ava</button><div id="lviga"></div></div>
+<div id="app" hidden><p><button id="uuesti">↻ Värskenda</button> <button id="tyhjenda">Tühjenda logi</button></p><div id="loend"></div></div></main>
+<script nonce="${nonce}">
+${ABI}
+let TOK='';try{TOK=sessionStorage.getItem('qw_dev')||'';}catch(e){}
+async function d(tee,post){const r=await fetch('/api/dev/'+tee,post?{method:'POST',headers:{'Authorization':'Bearer '+TOK,'Content-Type':'application/json'},body:'{}'}:{headers:{'Authorization':'Bearer '+TOK}});let j={};try{j=await r.json()}catch(e){}j.status=r.status;return j;}
+async function lae(){const j=await d('vead');if(!j.ok){$('#login').hidden=false;$('#app').hidden=true;$('#lviga').innerHTML=TOK?'<div class="viga">'+esc(j.viga||'Viga')+'</div>':'';return;}
+  $('#login').hidden=true;$('#app').hidden=false;
+  $('#loend').innerHTML=j.vead.length?j.vead.map(v=>'<div class="vk"><b>'+esc(v.aeg_tekst)+'</b> · '+esc(v.liik)+' · v'+esc(v.v)+(v.id?' ('+esc(v.id)+')':'')+'<br>'+esc(v.teade)+'<br><small>'+esc(v.leht)+(v.fail?' · '+esc(v.fail)+':'+esc(v.rida)+':'+esc(v.veerg):'')+'</small>'+(v.ua?'<br><small>'+esc(v.ua)+'</small>':'')+(v.stack?'<details><summary>stack</summary><pre>'+esc(v.stack)+'</pre></details>':'')+'</div>').join(''):'<p>Vigu pole (30 päeva).</p>';}
+$('#sisse').onclick=()=>{TOK=$('#tok').value.trim();try{sessionStorage.setItem('qw_dev',TOK);}catch(e){}lae();};
+$('#uuesti').onclick=lae;
+$('#tyhjenda').onclick=async()=>{if(!confirm('Kustutan kogu vealogi?'))return;await d('tyhjenda',true);lae();};
+lae();
+</script>${lisaJs(nonce, ver)}</body></html>`;
 }

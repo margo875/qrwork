@@ -74,12 +74,18 @@ Foto võtmisel, tagastamisel ja märkusega (nt kahjustuse tõendamiseks vaidluse
 npx wrangler login
 npx wrangler secret put ADMIN_TOKEN       # openssl rand -base64 32
 npx wrangler secret put TOKEN_SECRET      # openssl rand -base64 32
+npx wrangler secret put DEV_TOKEN         # vealogi /dev (valikuline)
 # valikuline: TG_BOT_TOKEN, TG_CHAT_ID, NTFY_TOPIC, NTFY_TOKEN; fotode jaoks R2 (vt wrangler.toml)
 npm run deploy
 ```
 Siis `/admin` → Seaded (firma nimi) → Töökohad (lisa, prindi plakat) → Seadmed (lisa, prindi sildid).
-**Domeen: `kratt.kindavel.ee`** (Margo otsus 01.11.2026; `wrangler.toml` `routes`; `qrwork.kindavel.ee` eemaldati 01.11.2026; sellele viitavad katsekleebised enam ei tööta). QR sisaldab aadressi püsivalt (`HTTPS://<DOMEEN>/S/<KOOD>`, suurtähtedega, alfanumeeriline režiim, veaparandus Q).
-**Domeenivahetus (Margo 02.11.2026):** uus domeen `krativara.ee` luuakse hiljem (saadavus kontrollimata), vana `kratt.kindavel.ee` suunab edasi. Valmis koodis: `PEA_HOST` (`wrangler.toml` `[vars]`) → kõik muud domeenid saavad 301 (GET) / 308 (POST) sama teega; rakenduse QR-lugeja tunneb ära ka vana domeeni kleebised (`src/lehed.js` `OMA_HOSTID`). Sisselogimine tuleb uuel domeenil korra uuesti teha (küpsis on domeeni kohta). Sammud: registreeri `krativara.ee` → lisa tsoon Cloudflare'i → `wrangler.toml` routes + `PEA_HOST` (näide failis) → deploy. Uued kleebised prindi alles pärast seda.
+**Domeen: `qrp.krativara.ee`** (Margo 02.11.2026: nimi Krativara, domeen krativara.ee registreeritud; varasem `kratt.kindavel.ee` eemaldati, kleebiseid polnud prinditud). Eeldus: krativara.ee on samas Cloudflare'i kontos aktiivne tsoon. QR sisaldab aadressi püsivalt (`HTTPS://<DOMEEN>/S/<KOOD>`, suurtähtedega, alfanumeeriline režiim, veaparandus Q); pärast printimist aadressi ei muudeta.
+
+## Versioon, vealogi, avakuva (0.3.0)
+- **Versioon:** `src/versioon.js` (tõsta iga sisulise muudatusega) + deploy'i id (`[version_metadata]`). Näha iga lehe jaluses.
+- **„Uus versioon, värskenda“:** leht kontrollib `/api/versioon` iga 5 min ja rakendusse naastes; kui deploy on muutunud, tuleb alla riba.
+- **Vealogi (ainult arendajale):** brauseri vead ja serveri erindid → `/dev` (võti `DEV_TOKEN`, haldur ei näe). Säilib 30 päeva, kuni 500 kirjet, piir 20 tunnis IP kohta. Ei salvestata kasutaja nime, telefoni ega IP-d. Lisaks Workers Logs (`[observability]`) Cloudflare'i paneelis.
+- **Avakuvale (PWA):** manifest + ikoonid. Android Chrome: jaluses nupp „Lisa avakuvale“ (või brauseri menüü); iPhone: Jaga → Lisa avakuvale. Võrguta tööd (service worker) pole.
 
 ## Turvalisus ja privaatsus
 - Parool: PBKDF2-SHA256 (vaikimisi 100 000 iteratsiooni, 16-baidine sool). Sessioon: juhuslik 40-märgine token, serveris ainult SHA-256 räsi, küpsis `HttpOnly; Secure; SameSite=Lax`. API nõuab päist `X-QW: 1` (CSRF).

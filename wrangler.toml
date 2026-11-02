@@ -2,19 +2,20 @@ name = "qrwork"
 main = "src/worker.js"
 compatibility_date = "2025-06-01"
 
-# Domeen: kratt.kindavel.ee (Margo otsus 01.11.2026, rakenduse nimi oli „Kratt“, 02.11.2026 „Krativara“). kindavel.ee DNS on samas Cloudflare'i kontos,
-# custom_domain loob DNS-kirje ja sertifikaadi esimesel deploy'l. QR-kleebistes on aadress püsivalt, seda ei muudeta.
-# qrwork.kindavel.ee (esimene katsedomeen) eemaldatud 01.11.2026 (Margo).
-routes = [{ pattern = "kratt.kindavel.ee", custom_domain = true }]
-# Nimi Krativara (Margo 02.11.2026). Kui krativara.ee on registreeritud ja Cloudflare'i lisatud (tsoon samas kontos):
-#   routes = [
-#     { pattern = "krativara.ee", custom_domain = true },
-#     { pattern = "kratt.kindavel.ee", custom_domain = true },   # vana, suunab edasi
-#   ]
-#   [vars]
-#   PEA_HOST = "krativara.ee"
-# Vana domeeni kleebised jäävad tööle (301/308 suunamine + rakendus tunneb ära ka vana domeeni QR-i, src/lehed.js OMA_HOSTID).
+# Domeen: qrp.krativara.ee (Margo 02.11.2026: nimi Krativara, domeen krativara.ee registreeritud, sama Cloudflare'i konto).
+# Kleebiseid pole prinditud, seega vana aadressi (kratt.kindavel.ee) ei suunata, see lihtsalt eemaldatakse.
+# Eeldus: krativara.ee on selles Cloudflare'i kontos aktiivne tsoon (nimeserverid Cloudflare'i omad), muidu deploy ebaõnnestub.
+# QR sisaldab aadressi püsivalt: pärast kleebiste printimist seda enam ei muudeta.
+routes = [{ pattern = "qrp.krativara.ee", custom_domain = true }]
 workers_dev = false
+
+# Workers Logs (serveri vead ja console.error Cloudflare'i paneelis: Workers → qrwork → Logs).
+[observability]
+enabled = true
+
+# Deploy'i id (versioon muutub iga deploy'ga, kasutajale tuleb „uus versioon, värskenda“ riba).
+[version_metadata]
+binding = "CF_VERSION"
 
 # Kõik andmed (register, kasutajad, laenud, logi) on ühes Durable Objectis (SQLite, tasuta plaanil lubatud).
 [[durable_objects.bindings]]
@@ -34,5 +35,6 @@ new_sqlite_classes = ["Register"]
 # Saladused (mitte siia faili!):
 #   npx wrangler secret put ADMIN_TOKEN     (≥ 16 märki, nt openssl rand -base64 32)
 #   npx wrangler secret put TOKEN_SECRET    (≥ 16 märki; IP-räsi sool)
+#   valikuline: DEV_TOKEN       (≥ 16 märki; arendaja vealogi lehel /dev)
 #   valikuline: TG_BOT_TOKEN + TG_CHAT_ID (Telegram), NTFY_TOPIC (+ NTFY_TOKEN, NTFY_URL)
 #   valikuline: PBKDF2_ITER (10000–100000, vaikimisi 100000; vt README „Parool ja CPU“)

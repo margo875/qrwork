@@ -17,7 +17,9 @@
 
 **Märkus:** teine lõim („QR-põhine digivõti süsteem“) kirjutas samasse repos harusse `claude/qr-digital-key-system-z0mhov` (docs/); see on eraldi projekt, mitte Kratt.
 
-**Otsus 1 (Margo 02.11):** „nimi Krativara, aadress täpsustada, domeen krativara.ee loomisel, vana hakkab suunama edasi“. Tehtud harus `ccr-b7663577-93oge9`: nimi lehtedel/teavitustes/kalendris, `PEA_HOST` suunamine (301/308), vana domeeni QR-id tuntakse ära, testid 19/19. krativara.ee saadavus kontrollimata (pilvest RDAP ei avane).
-**Ootel:** otsus 3 (versiooninumber + vealogi + PWA: jah/ei) – Margo vastus jäi sõnumist puudu; otsus 2 (eraldi Cloudflare'i konto) koos domeeni registreerimisega.
+**Margo 02.11 (2. sõnum):** „Ma registreerisin krativara.ee domeeni“ „Praegu jääb senine cloudflare“ „Miks kasutad suunamist mitte kohe muuta … Näiteks qrp.krativara.ee“ „Mingeid kleebiseid pole veel prinditud“ „Jah, tee punkt 3.“
+**Tehtud (haru `ccr-b7663577-93oge9`):** nimi Krativara; domeen `qrp.krativara.ee` (suunamine eemaldatud, kratt.kindavel.ee välja); 0.3.0: versioon jaluses, „uus versioon“ riba, vealogi `/dev` (DEV_TOKEN), Workers Logs, PWA. Testid 22/22, brauseris (Pixel 7 emuleeritud) kontrollitud.
+**Margo teha:** krativara.ee tsoon Cloudflare'i (nimeserverid); `wrangler secret put DEV_TOKEN` (või Cloudflare → Worker → Settings → Variables); liita haru main'i.
+**Ootel:** aadressi lõplik kuju (qrp. vs muu) enne printimist; eraldi Cloudflare'i konto alles piirangute korral.
 
-**Järgmine samm:** Margo registreerib krativara.ee (või kontrollib saadavust internet.ee-s), vastab otsusele 3.
+**Järgmine samm:** sõltumatu ülevaatus (alamagent), siis Margo liidab.
