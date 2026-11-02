@@ -192,8 +192,8 @@ export class Register {
     return (await this.loend('laen:')).map(([, l]) => l).filter((l) => l.kasutaja === id);
   }
   iter() { const n = Number(this.env.PBKDF2_ITER); return Number.isInteger(n) && n >= 10000 && n <= 100000 ? n : 100000; }
-  teavitaTaustal(tekst, gps) {
-    const p = teavita(this.env, tekst, gps).catch(() => {});
+  teavitaTaustal(tekst, gps, foto) {
+    const p = teavita(this.env, tekst, gps, foto).catch(() => {});
     if (this.state.waitUntil) this.state.waitUntil(p);
     return p;
   }
@@ -265,18 +265,26 @@ export class Register {
       const ics = /^\/api\/kalender\/([0-9A-Z]{32})\.ics$/.exec(tee);
       if (ics && request.method === 'GET') return await this.kalender(ics[1]);
       if (request.method !== 'POST') return viga('meetod', 405);
+      // Leidja sendBeacon-päringud (asukoht lehelt lahkumisel, „Helista“): sendBeacon ei saa päist lisada. Kaitse on skännitoken
+      // kehas (HMAC, 1 h), küpsist ei kasutata, seega CSRF-i ohtu pole.
+      if (tee === '/api/asukoht' || tee === '/api/helista') {
+        const k = await loeJson(request);
+        if (k === null) return viga('vigane päring', 413);
+        return tee === '/api/asukoht' ? await this.asukoht(request, k) : await this.helista(request, k);
+      }
       // CSRF: ainult JSON ja oma päis (teine sait ei saa neid ilma CORS-eelkontrollita saata)
       if (request.headers.get('X-QW') !== '1') return viga('päis puudub', 403);
       if (tee === '/api/foto') return await this.fotoUles(request);
+      if (tee === '/api/leid' && /^multipart\/form-data/i.test(request.headers.get('Content-Type') || '')) return await this.leid(request, null);
       const keha = await loeJson(request);
-      if (keha === null) return viga('vigane päring');
+      if (keha === null) return viga('vigane päring', 413);
       const ip = request.headers.get('X-IP-Rasi') || '';
       switch (tee) {
         case '/api/alusta': return await this.alusta(request, keha);
         case '/api/registreeru': return await this.registreeru(keha, ip);
         case '/api/logi-sisse': return await this.logiSisse(keha, ip);
         case '/api/parool': return await this.parooliTaastus(keha, ip);
-        case '/api/avalik': return await this.avalik(keha);
+        case '/api/avalik': return await this.avalik(request, keha);
         case '/api/leid': return await this.leid(request, keha);
         case '/api/viga': return await this.kliendiViga(keha, ip);
       }
@@ -720,35 +728,159 @@ export class Register {
   }
 
   // ---------- avalik osa: leidja ----------
-  async avalik({ kood }) {
+  // Voog (üle võetud leiamind'ist, Margo 02.11.2026): /api/avalik annab olekuta skännitokeni (1 h) ja saadab kohe teate „Silti skänniti“
+  // (aeg, IP järgi umbkaudne koht, seade; botid välja, IP-d ei salvestata). Leht saadab parima GPS-lugemi automaatselt ühe korra
+  // (/api/asukoht, 1 tokeni kohta), vormi /api/leid (tekst ≤ 400, kontakt ≤ 100, foto ainult Telegrami) ja „Helista“ vajutuse /api/helista.
+  async leidSeade(kood) {
     const kk = normKood(kood);
     const s = kk ? await this.elus(`seade:${kk}`) : null;
-    const seaded = await this.seaded();
-    if (!s) return viga('Tundmatu kood.', 404);
-    return json({ ok: true, firma: seaded.firma, nimi: s.nimi, invnr: s.invnr || '', telefon: seaded.telefon || '' });
+    return s ? { kk, s } : null;
   }
-  async leid(request, { kood, tekst, kontakt, lat, lon, tapsus }) {
-    const kk = normKood(kood);
-    const s = kk ? await this.elus(`seade:${kk}`) : null;
-    if (!s) return viga('Tundmatu kood.', 404);
+  async avalik(request, { kood }) {
+    const l = await this.leidSeade(kood);
+    if (!l) return viga('Tundmatu kood.', 404);
+    const { kk, s } = l;
+    const seaded = await this.seaded();
+    const token = await looToken(this.env, kk);
     const ip = request.headers.get('X-IP-Rasi') || '';
-    if (this.piiratud(`leid:${kk}`, 3, 60 * 1000) || this.piiratud(`leidip:${ip}`, 5, 60 * 1000) || this.piiratud(`leidtund:${kk}`, 10, 3600 * 1000))
-      return viga('Oota minut ja proovi uuesti.', 429);
-    this.viga(`leid:${kk}`); this.viga(`leidip:${ip}`); this.viga(`leidtund:${kk}`);
-    tekst = puhastaMitmerealine(tekst, 500); kontakt = puhasta(kontakt, 100);
-    const gps = typeof lat === 'number' && typeof lon === 'number' && Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180
-      ? { lat: Math.round(lat * 1e6) / 1e6, lon: Math.round(lon * 1e6) / 1e6, tapsus: Number.isFinite(tapsus) ? Math.round(tapsus) : null } : null;
+    // Skännimisteade: 1 minutis IP + silt, 5 minutis IP, 3 minutis silt, 10 tunnis silt. Piiratud või bot: ei logi ega teavita.
+    if (request.headers.get('X-Bot') !== '1' && !this.piiratud(`sk:${ip}:${kk}`, 1, 60000) && !this.piiratud(`skip:${ip}`, 5, 60000)
+      && !this.piiratud(`sks:${kk}`, 3, 60000) && !this.piiratud(`skt:${kk}`, 10, 3600000)) {
+      for (const v of [`sk:${ip}:${kk}`, `skip:${ip}`, `sks:${kk}`, `skt:${kk}`]) this.viga(v);
+      const nyyd = Date.now(), koht = ipKoht(request), sd = seadmeTyyp(request);
+      await this.logi({ tyyp: 'skann', leidkood: kk, ip_koht: koht, seade_ua: sd, aeg: nyyd });
+      this.teavitaTaustal([`🔔 Silti skänniti: ${s.nimi} (${s.invnr || kk})`, `Aeg: ${eestiAeg(nyyd)}`, `Asukoht (IP järgi, umbkaudne): ${koht}`, `Seade: ${sd}`].join('\n'));
+    }
+    return json({ ok: true, firma: seaded.firma, nimi: s.nimi, invnr: s.invnr || '', telefon: leidjaTelefon(this.env, seaded), token });
+  }
+  // Ühine kontroll: kehtiv token → seade. Tagastab {kk, s} või veavastuse.
+  async leidToken(token) {
+    const kk = await kehtivToken(this.env, token);
+    const l = kk ? await this.leidSeade(kk) : null;
+    return l || { vastus: viga('aegunud', 403) };
+  }
+  // Leidja päringu väravad: 1) IP (IP + silt 3/min, IP 5/min) → 429 „oota minut“; 2) logi (50 ööpäevas sildi kohta) → 503 „täis“;
+  // 3) teade (silt 3/min ja 10/h). Teate piiri ületanud sõnum jääb logisse ja leidjale öeldakse „salvestatud“.
+  leidVaravad(ip, kk, eesliide = 'l') {
+    if (this.piiratud(`${eesliide}ip:${ip}:${kk}`, eesliide === 'h' ? 1 : 3, 60000) || this.piiratud(`lip:${ip}`, 5, 60000)) return { ip: false };
+    this.viga(`${eesliide}ip:${ip}:${kk}`); this.viga(`lip:${ip}`);
+    const logi = !this.piiratud(`lp:${kk}`, PAEVA_MAX, 86400000);
+    if (logi) this.viga(`lp:${kk}`);
+    const teade = !this.piiratud(`${eesliide}m:${kk}`, 3, 60000) && !this.piiratud(`${eesliide}t:${kk}`, 10, 3600000);
+    if (teade) { this.viga(`${eesliide}m:${kk}`); this.viga(`${eesliide}t:${kk}`); }
+    return { ip: true, logi, teade };
+  }
+  async kellelRida(kk) {
     const laen = await this.s.get(`laen:${kk}`);
     const kellel = laen ? await this.s.get(`kasutaja:${laen.kasutaja}`) : null;
-    const linn = request.cf?.city ? `${request.cf.city}${request.cf.country ? ', ' + request.cf.country : ''}` : '';
-    await this.logi({ tyyp: 'leiuteade', leidkood: kk, tekst, kontakt, gps, linn }); // leidkood: ei lähe seadme ajalukku (L1)
-    await this.teavitaTaustal([
-      `📦 Leiuteade: ${s.nimi} (${s.invnr || kk})`,
-      kellel ? `Registreeritud: ${kellel.nimi}, ${kellel.tel}` : 'Seade ei ole kellegi nimel.',
-      tekst && `Leidja: „${tekst}“`, kontakt && `Kontakt: ${kontakt}`, linn && `Umbkaudu (IP): ${linn}`,
-      gps && `📍 https://maps.google.com/?q=${gps.lat},${gps.lon}${gps.tapsus ? ` (±${gps.tapsus} m)` : ''}`,
-    ].filter(Boolean).join('\n'), gps);
-    return json({ ok: true });
+    return kellel ? `Registreeritud: ${kellel.nimi}, ${kellel.tel}` : 'Seade ei ole kellegi nimel.';
+  }
+  // Automaatne asukoht (leht saadab parima lugemi ühe korra, ka sendBeaconiga lahkumisel): 1 tokeni kohta.
+  async asukoht(request, k) {
+    const t = await this.leidToken(k.token);
+    if (t.vastus) return t.vastus;
+    const { kk, s } = t;
+    if (!asukohtKehtib(k)) return viga('vigane asukoht');
+    const av = `auto:${String(k.token).split('.')[2]}`;
+    if (await this.s.get(av)) return viga('juba saadetud', 409);
+    const v = this.leidVaravad(request.headers.get('X-IP-Rasi') || '', kk);
+    if (!v.ip) return viga('oota minut', 429);
+    if (!v.logi && !v.teade) return viga('tais', 503);
+    const nyyd = Date.now();
+    await this.s.put(av, { aegub: nyyd + SKANN_TTL * 1000 });
+    await this.autoKoristus(nyyd);
+    const tapsus = tapsusM(k.tapsus), pv = posVanus(k.pos_vanus), vt = vanusTekst(pv, nyyd);
+    const gps = { lat: ymarda6(k.lat), lon: ymarda6(k.lon), tapsus };
+    if (v.logi) await this.logi({ tyyp: 'leid_asukoht', leidkood: kk, gps, ...(vt ? { pos_vanus: pv } : {}), aeg: nyyd });
+    if (v.teade) this.teavitaTaustal([`📍 ${tapsus ? `±${tapsus} m` : 'Asukoht'}: ${s.nimi} (${s.invnr || kk})`, `Aeg: ${eestiAeg(nyyd)}`, vt && `Asukoht ${vt}`,
+      await this.kellelRida(kk), `Kaart: ${kaart(gps.lat, gps.lon)}`].filter(Boolean).join('\n'), gps);
+    return json({ ok: true, salvestatud: v.logi, teavitatud: v.teade });
+  }
+  async autoKoristus(nyyd) {
+    this.autoN = (this.autoN || 0) + 1;
+    if (this.autoN % 20 !== 1) return;
+    for (const [v, x] of await this.loend('auto:')) if (!x || x.aegub < nyyd) await this.s.delete(v);
+  }
+  // Vorm „Saada omanikule“: JSON või multipart (foto). Foto läheb ainult Telegrami (sendPhoto), serverisse seda ei salvestata.
+  async leid(request, keha) {
+    let k = keha, foto = null, eelIp = null;
+    if (!k) {
+      // multipart: Content-Length (kui on) ≤ piir, token päises ja IP värav ENNE keha lugemist; keha loetakse voona piiriga
+      const clh = request.headers.get('Content-Length');
+      if (clh !== null && !/^\d{1,12}$/.test(clh)) return viga('vigane päring');
+      if (clh !== null && Number(clh) > LEID_KEHA_MAX) return viga('foto liiga suur', 413);
+      const t0 = await this.leidToken(request.headers.get('X-Leid-Token'));
+      if (t0.vastus) return t0.vastus;
+      eelIp = this.leidVaravad(request.headers.get('X-IP-Rasi') || '', t0.kk);
+      if (!eelIp.ip) return viga('oota minut', 429);
+      const toor = await loeKeha(request, LEID_KEHA_MAX);
+      if (!toor) return viga('foto liiga suur', 413);
+      let fd;
+      try { fd = await new Response(toor, { headers: { 'Content-Type': request.headers.get('Content-Type') } }).formData(); } catch { return viga('vigane päring'); }
+      const tx = (n) => { const x = fd.get(n); return typeof x === 'string' ? x : undefined; };
+      const arv = (n) => (tx(n) === undefined || tx(n).trim() === '' ? undefined : Number(tx(n)));
+      k = { token: request.headers.get('X-Leid-Token'), lat: arv('lat'), lon: arv('lon'), tapsus: arv('tapsus'), pos_vanus: arv('pos_vanus'), tekst: tx('tekst'), kontakt: tx('kontakt'),
+        puudub: tx('puudub'), auto_saadetud: tx('auto_saadetud'), foto_lat: arv('foto_lat'), foto_lon: arv('foto_lon'), foto_aeg: tx('foto_aeg') };
+      const f = fd.get('foto');
+      if (f && typeof f === 'object' && typeof f.arrayBuffer === 'function' && f.size > 0) {
+        if (f.size > LEID_FOTO_MAX) return viga('foto liiga suur', 413);
+        const bytes = new Uint8Array(await f.arrayBuffer());
+        const ty = fotoTyyp(bytes);
+        if (!ty) return viga('foto tüüp', 415);
+        foto = { bytes, laiend: ty, mime: ty === 'jpg' ? 'image/jpeg' : `image/${ty}` };
+      }
+    }
+    const t = await this.leidToken(k.token);
+    if (t.vastus) return t.vastus;
+    const { kk, s } = t;
+    const gps = (k.lat !== undefined && k.lat !== null) || (k.lon !== undefined && k.lon !== null);
+    if (gps && !asukohtKehtib(k)) return viga('vigane asukoht');
+    const fgAnti = (k.foto_lat !== undefined && k.foto_lat !== null) || (k.foto_lon !== undefined && k.foto_lon !== null);
+    if (fgAnti && !asukohtKehtib({ lat: k.foto_lat, lon: k.foto_lon })) return viga('vigane asukoht');
+    const fg = foto && fgAnti ? { lat: ymarda6(k.foto_lat), lon: ymarda6(k.foto_lon), aeg: FOTO_AEG_RE.test(k.foto_aeg || '') ? k.foto_aeg : null } : null;
+    const tekst = leidjaTekst(k.tekst), kontakt = leidjaTekst(k.kontakt);
+    if (tekst.length > TEKST_MAX) return viga(`Kirjeldus on liiga pikk: kuni ${TEKST_MAX} märki.`);
+    if (kontakt.length > KONTAKT_MAX) return viga(`Kontakt on liiga pikk: kuni ${KONTAKT_MAX} märki.`);
+    if (!gps && !tekst && !kontakt && !foto) return viga('tühi');
+    const v = eelIp || this.leidVaravad(request.headers.get('X-IP-Rasi') || '', kk);
+    if (!v.ip) return viga('oota minut', 429);
+    if (!v.logi && !v.teade) return viga('tais', 503);
+    const nyyd = Date.now();
+    const tapsus = gps ? tapsusM(k.tapsus) : null, pv = gps ? posVanus(k.pos_vanus) : 0, vt = vanusTekst(pv, nyyd);
+    const g = gps ? { lat: ymarda6(k.lat), lon: ymarda6(k.lon), tapsus } : null;
+    const ipk = !gps && !fg ? ipKoht(request) : null; // IP-koht ainult täpse asukoha puudumisel, kaardilinki ega kaardipunkti sellest ei tehta
+    if (v.logi) await this.logi({ tyyp: 'leiuteade', leidkood: kk, tekst, kontakt, ...(g ? { gps: g } : {}), ...(vt ? { pos_vanus: pv } : {}), ...(fg ? { foto_gps: fg } : {}),
+      ...(ipk ? { ip_koht: ipk } : {}), ...(foto ? { leidja_foto: foto.bytes.length } : {}), aeg: nyyd }); // leidkood: ei lähe seadme ajalukku (L1)
+    let fotoOk = false;
+    if (v.teade) {
+      const pohjus = Object.hasOwn(PUUDUB, k.puudub || '') ? ` (${PUUDUB[k.puudub]})` : '';
+      const tekstiRead = [
+        `📦 Leiuteade: ${s.nimi} (${s.invnr || kk})`, `Aeg: ${eestiAeg(nyyd)}`, await this.kellelRida(kk),
+        tekst && `Leidja: „${tekst}“`, kontakt && `Kontakt: ${kontakt}`, foto && '📷 Foto lisatud',
+        fg && `📷 Foto asukoht (foto andmetest): ${kaart(fg.lat, fg.lon)}${fg.aeg ? ` (pildistatud ${fg.aeg})` : ''}`,
+        g && `📍 ${tapsus ? `±${tapsus} m` : 'Leidja asukoht'}${vt ? ` (${vt})` : ''}: ${kaart(g.lat, g.lon)}`,
+        ipk && `Täpset asukohta ei saadetud${pohjus}; umbkaudu IP järgi: ${ipk}`,
+      ].filter(Boolean).join('\n');
+      // kaardipunkt: foto asukoht, muidu leidja oma; kui sama lugem läks juba automaatteatena, teist punkti ei saadeta
+      const punkt = fg ? { lat: fg.lat, lon: fg.lon } : g && !k.auto_saadetud ? { lat: g.lat, lon: g.lon } : undefined;
+      if (foto) fotoOk = Boolean((await this.teavitaTaustal(tekstiRead, punkt, foto))?.fotoOk); // fotoga oodatakse, et leidjale ausalt vastata
+      else this.teavitaTaustal(tekstiRead, punkt);
+    }
+    return json({ ok: true, salvestatud: v.logi, teavitatud: v.teade, ...(foto ? { foto: fotoOk } : {}) });
+  }
+  // „📞 Helista omanikule“ vajutus (sendBeacon): teade omanikule; tel: link avaneb leidja telefonis igal juhul.
+  async helista(request, k) {
+    const t = await this.leidToken(k.token);
+    if (t.vastus) return t.vastus;
+    const { kk, s } = t;
+    if (!leidjaTelefon(this.env, await this.seaded())) return viga('telefon puudub');
+    const v = this.leidVaravad(request.headers.get('X-IP-Rasi') || '', kk, 'h');
+    if (!v.ip) return viga('oota minut', 429);
+    if (!v.logi && !v.teade) return viga('tais', 503);
+    const nyyd = Date.now(), ipk = ipKoht(request);
+    if (v.logi) await this.logi({ tyyp: 'helista', leidkood: kk, ip_koht: ipk, aeg: nyyd });
+    if (v.teade) this.teavitaTaustal(`📞 Leidja vajutas „Helista“: ${s.nimi} (${s.invnr || kk})\nAeg: ${eestiAeg(nyyd)}\nUmbkaudu IP järgi: ${ipk}`);
+    return json({ ok: true, salvestatud: v.logi, teavitatud: v.teade });
   }
 
   // ---------- haldus ----------
@@ -786,6 +918,10 @@ export class Register {
       case 'marge-lahenda': return this.adminLahenda('marge:', b);
       case 'vaidlus-lahenda': return this.adminLahenda('vaidlus:', b);
       case 'seaded': return this.adminSeaded(b);
+      case 'testteade': { // testteade Telegrami/ntfy-sse; vea põhjus tagasi halduse lehele (tokenit ei näidata)
+        const t = await teavita(this.env, `✅ Krativara testteade (${eestiAeg(Date.now())})`);
+        return json({ ok: t.saadetud > 0, saadetud: t.saadetud, tg: t.tg, ntfy: t.ntfy });
+      }
       case 'kustuta': return this.adminKustuta(b);
       case 'taasta': return this.adminTaasta(b);
       case 'taatlus': return this.adminTaatlus(b);
@@ -1065,6 +1201,86 @@ export class Register {
     for (const x of l) read.push([eestiAeg(x.aeg), x.tyyp, x.kood, x.nimi, x.eelmise_nimi || x.uus, x.tekst || x.marge].map(csvLahter).join(';'));
     return new Response('﻿' + read.join('\r\n'), { headers: { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': 'attachment; filename="logi.csv"', 'Cache-Control': 'no-store' } });
   }
+}
+
+// ---------- leidja abi (üle võetud leiamind'ist, 02.11.2026) ----------
+const SKANN_TTL = 3600;                 // skännitoken kehtib 1 h
+const PAEVA_MAX = 50;                   // leidja kirjeid ööpäevas sildi kohta
+const TEKST_MAX = 400, KONTAKT_MAX = 100;
+const LEID_FOTO_MAX = 2 * 1024 * 1024;  // leidja foto (brauser vähendab ≤ 1600 px); serverisse ei salvestata
+const LEID_KEHA_MAX = 2.5 * 1024 * 1024; // fotoga päringu kogu keha (loetakse voona, päist ei usaldata)
+const TOKEN_RE = /^([0-9A-HJKMNP-TV-Z]{12})\.(\d{9,12})\.([0-9a-f]{64})$/;
+const FOTO_AEG_RE = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
+const PUUDUB = { luba: 'luba keelatud', tugi: 'brauser ei toeta asukohta' };
+async function hmacHex(saladus, sisu) {
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(saladus), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  return [...new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(sisu)))].map((x) => x.toString(16).padStart(2, '0')).join('');
+}
+function tokeniSaladus(env) {
+  if (!env.TOKEN_SECRET || String(env.TOKEN_SECRET).length < 16) throw new Error('TOKEN_SECRET puudub või on lühem kui 16 märki');
+  return `skann|${env.TOKEN_SECRET}`;
+}
+// Olekuta skännitoken: kood.aegumine.HMAC-SHA256(TOKEN_SECRET, "kood.aegumine"); serverisse ei salvestata
+export async function looToken(env, kood, nyyd = Date.now()) {
+  const exp = Math.floor(nyyd / 1000) + SKANN_TTL;
+  return `${kood}.${exp}.${await hmacHex(tokeniSaladus(env), `${kood}.${exp}`)}`;
+}
+export async function kehtivToken(env, token, nyyd = Date.now()) {
+  const m = typeof token === 'string' ? TOKEN_RE.exec(token) : null;
+  if (!m) return null;
+  const s = Math.floor(nyyd / 1000);
+  if (Number(m[2]) < s || Number(m[2]) > s + SKANN_TTL) return null;
+  return vordle(await hmacHex(tokeniSaladus(env), `${m[1]}.${m[2]}`), m[3]) ? m[1] : null;
+}
+// IP-põhine koht arvutatakse Workeris request.cf-ist (linn, regioon, riik (teenusepakkuja)) ja tuleb päises X-IP-Koht (kliendi oma kirjutatakse üle)
+const ipKoht = (request) => { try { return decodeURIComponent(request.headers.get('X-IP-Koht') || '').slice(0, 160) || 'teadmata'; } catch { return 'teadmata'; } };
+// Seade: sec-ch-ua-platform (Chromium) või UA järgi OS + brauser, üldkujul
+export function seadmeTyyp(request) {
+  const ua = request.headers.get('User-Agent') || '';
+  const hint = (request.headers.get('Sec-CH-UA-Platform') || '').replace(/"/g, '').trim();
+  const mobiil = (request.headers.get('Sec-CH-UA-Mobile') || '').trim() === '?1' || /Mobile/.test(ua);
+  const HINT = { Android: 'Android', iOS: 'iOS', Windows: 'Windows', macOS: 'macOS', Linux: 'Linux', 'Chrome OS': 'ChromeOS', ChromeOS: 'ChromeOS' };
+  const uaOs = /iPhone|iPad/.test(ua) ? 'iOS' : /Android/.test(ua) ? 'Android' : /Windows/.test(ua) ? 'Windows' : /Mac OS/.test(ua) ? 'macOS' : /Linux/.test(ua) ? 'Linux' : null;
+  let os = HINT[hint] || uaOs || (mobiil ? 'mobiil' : 'muu');
+  if (os === 'Linux' && /Android/.test(ua)) os = 'Android';
+  const br = /Edg\//.test(ua) ? 'Edge' : /SamsungBrowser/.test(ua) ? 'Samsung' : /CriOS|Chrome\//.test(ua) ? 'Chrome' : /FxiOS|Firefox\//.test(ua) ? 'Firefox' : /Safari\//.test(ua) ? 'Safari' : 'muu';
+  return `${os}, ${br}`;
+}
+// „Helista omanikule“ number: halduse seade „Kontakttelefon leidjale“, selle puudumisel saladus OMANIKU_TELEFON
+export const leidjaTelefon = (env, seaded) => normTel(seaded.telefon || '') || normTel(String(env.OMANIKU_TELEFON || '')) || '';
+const asukohtKehtib = (k) => typeof k?.lat === 'number' && typeof k.lon === 'number' && Number.isFinite(k.lat) && Number.isFinite(k.lon) && Math.abs(k.lat) <= 90 && Math.abs(k.lon) <= 180;
+const ymarda6 = (x) => Math.round(x * 1e6) / 1e6;
+function tapsusM(x) {
+  const t = Number(x);
+  return (typeof x === 'number' || (typeof x === 'string' && x.trim() !== '')) && Number.isFinite(t) && t > 0 && t <= 100000 ? Math.max(1, Math.round(t)) : null;
+}
+const POS_VANA_S = 120;
+const posVanus = (x) => (Number.isInteger(x) && x >= 0 && x <= 86400 ? x : 0);
+function vanusTekst(vanus, nyyd) {
+  if (!(vanus > POS_VANA_S)) return '';
+  const hhmm = new Date(nyyd - vanus * 1000).toLocaleTimeString('et-EE', { timeZone: 'Europe/Tallinn', hour: '2-digit', minute: '2-digit' });
+  return `määratud ${hhmm}, ${Math.round(vanus / 60)} min tagasi`;
+}
+const kaart = (lat, lon) => `https://maps.google.com/?q=${lat},${lon}`;
+// Leidja tekst: reavahetus normaliseeritud, juhtmärgid tühikuks; pikem kui piir lükatakse tagasi (vaikselt ei lõigata)
+const leidjaTekst = (v) => (typeof v === 'string' ? v.replace(/\r\n?/g, '\n').replace(/[\u0000-\u0009\u000b-\u001f\u007f]/g, ' ').trim() : '');
+// Keha lugemine piiriga: voog katkestatakse piiri ületamisel (Content-Length'i ei usaldata)
+async function loeKeha(request, max) {
+  if (!request.body) return new Uint8Array(0);
+  const lugeja = request.body.getReader();
+  const osad = [];
+  let kokku = 0;
+  for (;;) {
+    const { done, value } = await lugeja.read();
+    if (done) break;
+    kokku += value.length;
+    if (kokku > max) { await lugeja.cancel().catch(() => {}); return null; }
+    osad.push(value);
+  }
+  const out = new Uint8Array(kokku);
+  let o = 0;
+  for (const x of osad) { out.set(x, o); o += x.length; }
+  return out;
 }
 
 async function loeJson(request) {

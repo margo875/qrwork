@@ -32,6 +32,15 @@ Cloudflare Worker + üks Durable Object (SQLite), sõltuvusi pole. Lähtekoht on
 9. **Kus seade on? (sisemine leia mind):** otsing nime, tüübi või inventarinumbri järgi näitab, kelle käes seade on (nimi, telefon, alates) või millises laos see viimati tagastati.
 10. **Leidja (väline leia mind):** sisse logimata inimene näeb seadme QR-ist firma nime ja seadme nime, saab saata sõnumi, kontakti ja (loaga) GPS-asukoha. Haldur saab teate koos selle inimesega, kelle nimel seade on.
 
+## Leidja voog (0.4.0, üle võetud leiamind'ist 02.11.2026)
+1. Sisse logimata inimene avab seadme QR-i `/S/<kood>`. Leht küsib `/api/avalik` ja saab **olekuta skännitokeni** (`kood.aegumine.HMAC-SHA256(TOKEN_SECRET)`, 1 h). Server saadab kohe teate **„🔔 Silti skänniti“**: aeg, IP järgi umbkaudne koht `request.cf`-ist (linn, regioon, riik, teenusepakkuja) ilma kaardilingita ja seade (`sec-ch-ua-platform` + UA). Botid (eelvaated, curl jms) teadet ei käivita. Piirid: 1/min IP + silt, 5/min IP, 3/min silt, 10/h silt. IP-d ei salvestata (ainult soolatud räsi DO mälus).
+2. Leht käivitab kohe `watchPosition`'i (kuni 30 s, lõpp ≤ 20 m juures), jätab kõige täpsema lugemi ja saadab selle **automaatselt üks kord** (`/api/asukoht`, 1 tokeni kohta, DO-s märge `auto:<allkiri>`). Kui leidja lehe enne sulgeb, läheb lugem `sendBeacon`'iga. Teade „📍 ±N m“ + kaardilink + Telegrami `sendLocation`. Leidjale loendurit ega ootamist ei näidata.
+3. Vorm: kirjeldus (≤ 400 märki) ja kontakt (≤ 100), kõva piir ja loendur kasti nurgas, pikem tekst lükatakse serveris tagasi. Valikuline foto vähendatakse brauseris (≤ 1600 px, EXIF kaob), foto GPS loetakse originaalist eraldi. Foto läheb **ainult Telegrami** (`sendPhoto`), serverisse (R2) seda ei salvestata. Nupp „Saada omanikule“ saadab kohe; „📞 Helista omanikule“ (number: Seaded → „Kontakttelefon leidjale“, selle puudumisel saladus `OMANIKU_TELEFON`) saadab ka teate.
+4. Täpse asukoha puudumisel lisatakse teatesse IP-koht ilma kaardilingita. Leidja lehel on üks privaatsuslause; pärast saatmist „Saadetud. Aitäh!“ (või „Salvestatud. Aitäh!“, kui teate piir on täis ja kirje jäi ainult logisse).
+5. Leidja päringute piirid: IP + silt 3/min ja IP 5/min (→ „oota minut“), logi 50 ööpäevas sildi kohta (→ „ei saa praegu vastu võtta“), teade silt 3/min ja 10/h. `/api/asukoht` ja `/api/helista` ei nõua päist `X-QW` (sendBeacon ei saa päist lisada); kaitse on token, küpsist need ei kasuta.
+6. Haldus → Seaded → **🔔 Saada testteade**: näitab Telegrami/ntfy tulemust ja vea põhjust vihjega (nt „chat not found → ava bot ja vajuta Start“), tokenit ei näidata.
+- Kõik piirid on DO-s (üks eksemplar, täpsed), Cloudflare'i Rate Limiting bindingut pole vaja. Mälus olevad loendurid nullitakse DO taaskäivitusel.
+
 ## Inventarinumber, superkasutaja ja kataloog (Margo 01.11.2026)
 - **Inventarinumber** tekib uuele seadmele automaatselt: `<lao lühend>-<AAKK><järjekorranumber>`, nt `L1-2611001` = ladu L1, 2026 november, 1. seade. Järjekord algab igas laos iga kuu alguses 001-st. Lao lühend (L1, L2…) antakse automaatselt, haldur võib selle muuta (1–6 tähte/numbrit, unikaalne). Olemasoleva numbriga seadmele võib numbri käsitsi sisestada. Uue seadme lisamisel on ladu kohustuslik.
 - **Tavakasutaja** ei näe seadmete loendit: „Kus on seade?“ näitab tulemusi alles vähemalt 2 märgi järel või QR-koodi skännimisel.
@@ -75,7 +84,7 @@ npx wrangler login
 npx wrangler secret put ADMIN_TOKEN       # openssl rand -base64 32
 npx wrangler secret put TOKEN_SECRET      # openssl rand -base64 32
 npx wrangler secret put DEV_TOKEN         # vealogi /dev (valikuline)
-# valikuline: TG_BOT_TOKEN, TG_CHAT_ID, NTFY_TOPIC, NTFY_TOKEN; fotode jaoks R2 (vt wrangler.toml)
+# valikuline: TG_BOT_TOKEN, TG_CHAT_ID, NTFY_TOPIC, NTFY_TOKEN, OMANIKU_TELEFON (+3725…); fotode jaoks R2 (vt wrangler.toml)
 npm run deploy
 ```
 Siis `/admin` → Seaded (firma nimi) → Töökohad (lisa, prindi plakat) → Seadmed (lisa, prindi sildid).

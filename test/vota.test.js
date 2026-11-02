@@ -142,8 +142,10 @@ test('kasutaja ei muuda registrit, märkus läheb kirja', async () => {
 test('leidja ja lehed', async () => {
   const { env, s1 } = await alus();
   const c = klient(env);
-  assert.equal((await c('/api/avalik', { kood: s1.kood })).j.nimi, 'Nivelliir');
-  assert.equal((await c('/api/leid', { kood: s1.kood, tekst: 'leidsin', lat: 59.4, lon: 24.7 })).j.ok, true);
+  const av = (await c('/api/avalik', { kood: s1.kood })).j;
+  assert.equal(av.nimi, 'Nivelliir');
+  assert.equal((await c('/api/leid', { token: av.token, tekst: 'leidsin', lat: 59.4, lon: 24.7 })).j.ok, true);
+  assert.equal((await c('/api/leid', { kood: s1.kood, tekst: 'tokenita' })).status, 403, 'tokenita ei saa');
   for (const tee of ['/', `/S/${s1.kood}`, `/k/${s1.kood}`, '/admin', '/jsqr.js']) {
     const r = await c(tee, null, 'GET');
     assert.equal(r.status, 200, tee);

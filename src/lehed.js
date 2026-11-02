@@ -2,6 +2,7 @@
 // Välist koodi ei laeta: QR-generaator on src/qrgen.js (MIT), QR-lugeja jsQR /jsqr.js (Apache-2.0) ainult siis,
 // kui brauseril pole BarcodeDetector'it. Kõik kasutaja sisestatud väärtused läbivad esc().
 import { QR_JS } from './qrgen.js';
+import { EXIF_JS } from './exif.js';
 
 // Skännitud QR teksti tõlgendus. Kehtib ainult sama hosti /S/<kood> (seade) või /K/<kood> (töökoht).
 // Funktsioon läheb lehele .toString() abil, seega sama kood töötab brauseris ja testides.
@@ -37,6 +38,8 @@ video{width:100%;max-height:45vh;background:#000;border-radius:12px;object-fit:c
 .mark{display:flex;gap:8px;align-items:flex-start;margin:6px 0}.mark input{width:auto;margin-top:4px}
 #uusver{position:fixed;left:0;right:0;bottom:0;z-index:50;background:#1d4ed8;color:#fff;padding:10px 16px;text-align:center}#uusver button{margin-left:8px;background:#fff;color:#1d4ed8;width:auto}
 #jalus{color:#6b7280;font-size:.8rem;text-align:center;padding:16px 16px 60px}#jalus button{width:auto;padding:4px 10px;font-size:.8rem}
+.lahter{position:relative}.lahter textarea{display:block;padding-bottom:26px}.lahter input{display:block;padding-right:64px}
+.lk{position:absolute;right:12px;bottom:18px;font-size:.75rem;line-height:1;color:#6b7280;pointer-events:none}.lk.pk{color:#b91c1c}.lahter.in .lk{bottom:auto;top:50%;transform:translateY(-50%)}
 .tapp{display:inline-block;min-width:1.3em;padding:0 .35em;border-radius:1em;background:#dc2626;color:#fff;font-size:.75rem;line-height:1.3em;text-align:center;font-weight:700}`;
 
 // Kõigil lehtedel: tehniline vealogi (ainult arendajale, /dev), „uus versioon“ riba, jalus versiooniga ja avakuvale lisamine.
@@ -76,6 +79,7 @@ export function appLeht(nonce, { seade = '', koht = '', info = '', ver } = {}) {
 ${ABI}
 ${koodTekstist.toString()}
 ${kasitsiKood.toString()}
+${EXIF_JS}
 const URL_SEADE=${JSON.stringify(seade)}, URL_KOHT=${JSON.stringify(koht)}, URL_INFO=${JSON.stringify(info)};
 let S={firma:'',koht:null,mina:null};
 const LS={get(k){try{return localStorage.getItem(k)||''}catch(e){return ''}},set(k,v){try{localStorage.setItem(k,v)}catch(e){}}};
@@ -362,20 +366,78 @@ async function laod(){
 }
 
 // ---------- leidja (sisse logimata) ----------
+// Üle võetud leiamind'ist (Margo 02.11.2026): asukoht lehe avamisel (watchPosition ≤ 30 s, lõpp ≤ 20 m juures, alles jääb kõige täpsem),
+// parim lugem saadetakse automaatselt üks kord (/api/asukoht), lehelt lahkumisel sendBeaconiga. Leidjale loendurit ega ootamist ei näidata.
+let LW=null;
+function leidLopp(){if(LW){LW.lopeta();LW=null;}}
 async function leidjaVaade(kood){
   const j=await api('/api/avalik',{kood});
   if(!j.ok){sisu('<h1>Tundmatu QR-kood</h1><div class="viga">Seda koodi ei ole registris. Pöördu administraatori poole.</div>');return;}
-  S.firma=j.firma;
+  S.firma=j.firma; const T=j.token;
   sisu('<h1>'+esc(j.firma)+'</h1><div class="kaart"><p>See tööriist kuulub firmale <b>'+esc(j.firma)+'</b>:<br><b>'+esc(j.nimi)+'</b>'+(j.invnr?' ('+esc(j.invnr)+')':'')+'</p>'+
-   '<p>Leidsid selle? Palun anna teada, kus see on. Aitäh!</p>'+(j.telefon?'<a class="nupp roh" href="tel:'+esc(j.telefon)+'">📞 Helista '+esc(j.telefon)+'</a>':'')+
-   '<label>Kus seade on / sõnum</label><textarea id="tekst" rows="3" maxlength="500"></textarea><label>Sinu kontakt (valikuline)</label><input id="kontakt" maxlength="100">'+
-   '<label class="mark"><input type="checkbox" id="gps" checked><span>Lisa minu asukoht (brauser küsib luba)</span></label><button class="suur roh" id="saada">Saada teade</button><div id="teade"></div></div>'+
+   '<p>Leidsid selle? Palun anna teada, kus see on. Aitäh!</p>'+
+   '<label for="tekst">Kus seade on / kirjeldus</label><div class="lahter"><textarea id="tekst" rows="3" maxlength="400"></textarea><span class="lk" id="tekst-lk">0/400</span></div>'+
+   '<label for="kontakt">Sinu telefon või e-post (valikuline)</label><div class="lahter in"><input id="kontakt" maxlength="100"><span class="lk" id="kontakt-lk">0/100</span></div>'+
+   '<p class="vaike">🔒 Sinu nime ega kontaktandmeid ei saadeta, kui sa neid vormi ei lisa.</p>'+
+   '<label for="lfoto">📷 Lisa foto (valikuline)</label><input id="lfoto" type="file" accept="image/*" capture="environment">'+
+   '<div id="lfeel" hidden><img id="lfimg" alt="Foto eelvaade" style="max-width:100%;max-height:180px;border-radius:8px;margin-top:8px"><button id="lfvota" type="button">Eemalda</button></div>'+
+   '<button class="suur roh" id="saada">Saada omanikule</button>'+(j.telefon?'<a class="nupp" id="helista" href="tel:'+esc(j.telefon)+'">📞 Helista omanikule</a>':'')+
+   '<div id="olek" role="status"></div></div>'+
    '<div class="kaart"><p class="vaike">Oled selle firma töötaja?</p><button id="sisse">Logi sisse</button></div>');
-  $('#sisse').onclick=()=>sisene(kood,'sisse');
-  $('#saada').onclick=async()=>{ $('#saada').disabled=true; $('#teade').innerHTML='<div class="vaike">Saadan…</div>';
-    let pos=null; if($('#gps').checked&&navigator.geolocation){pos=await new Promise(ok=>navigator.geolocation.getCurrentPosition(p=>ok(p.coords),()=>ok(null),{enableHighAccuracy:true,timeout:12000,maximumAge:60000}));}
-    const r=await api('/api/leid',{kood,tekst:$('#tekst').value,kontakt:$('#kontakt').value,lat:pos?pos.latitude:undefined,lon:pos?pos.longitude:undefined,tapsus:pos?pos.accuracy:undefined});
-    $('#teade').innerHTML=r.ok?'<div class="ok">Aitäh! Teade saadeti'+(pos?' koos asukohaga':'')+'.</div>':'<div class="viga">'+esc(r.viga||'Saatmine ebaõnnestus')+'</div>'; $('#saada').disabled=!!r.ok?true:false; if(!r.ok)$('#saada').disabled=false;};
+  const ol=$('#olek'), nupp=$('#saada'), tk=$('#tekst'), kk=$('#kontakt');
+  const post=(u,b)=>fetch(u,{method:'POST',headers:{'Content-Type':'application/json','X-QW':'1'},body:JSON.stringify(Object.assign({token:T},b)),credentials:'same-origin'}).then(r=>r.json()).catch(()=>({ok:false,viga:'ühendus'}));
+  const postFoto=(b,f)=>{const fd=new FormData();for(const k in b)if(b[k]!==undefined&&b[k]!==null)fd.append(k,b[k]);fd.append('foto',f,'foto.jpg');
+    return fetch('/api/leid',{method:'POST',headers:{'X-QW':'1','X-Leid-Token':T},body:fd,credentials:'same-origin'}).then(r=>r.json()).catch(()=>({ok:false,viga:'ühendus'}));};
+  const beacon=(u,b)=>{const s=JSON.stringify(Object.assign({token:T},b));let ok=false;
+    try{ok=!!(navigator.sendBeacon&&navigator.sendBeacon(u,new Blob([s],{type:'text/plain'})));}catch(x){}
+    if(!ok){try{fetch(u,{method:'POST',headers:{'Content-Type':'text/plain'},body:s,keepalive:true}).catch(()=>{});}catch(x){}}};
+  // Tekstilahtrite kõva piir: maxlength + lõikamine sisestusel (poolik surrogaatpaar lõppu ei jää), loendur kasti nurgas
+  function piira(el,max){const lk=$('#'+el.id+'-lk');const u=()=>{if(el.value.length>max)el.value=el.value.slice(0,max).replace(/[\\uD800-\\uDBFF]$/,'');const n=el.value.length;lk.textContent=n+'/'+max;lk.classList.toggle('pk',n>=max-1);};el.addEventListener('input',u);u();}
+  piira(tk,400);piira(kk,100);
+  // Asukoht
+  let W=null,POS=null,AUTO=false,REFUS=false,SAADETUD=false;
+  const acc=p=>{const a=p&&p.coords.accuracy;return Number.isFinite(a)?a:Infinity;};
+  const pvanus=()=>POS?Math.max(0,Math.round((Date.now()-POS.t)/1000)):0;
+  const koord=p=>({lat:p.coords.latitude,lon:p.coords.longitude,tapsus:p.coords.accuracy,pos_vanus:pvanus()});
+  function lopetaW(){if(!W)return;try{navigator.geolocation.clearWatch(W.id);}catch(e){}clearTimeout(W.vaht);W=null;}
+  function autoSaada(){if(AUTO)return;AUTO=true;const p=POS&&POS.p;if(!p)return;SAADETUD=true;post('/api/asukoht',koord(p));}
+  function lahkub(){if(AUTO||!POS)return;AUTO=true;SAADETUD=true;lopetaW();beacon('/api/asukoht',koord(POS.p));}
+  const peidus=()=>{if(document.visibilityState==='hidden')lahkub();};
+  if(navigator.geolocation){
+    const w=W={id:null,vaht:null};
+    const lopp=()=>{if(W!==w)return;lopetaW();autoSaada();};
+    w.vaht=setTimeout(lopp,30000);
+    const uus=p=>{if(W!==w)return;const a=p.coords.accuracy;if(POS&&!(Number.isFinite(a)&&a<acc(POS.p)))return;POS={p:p,t:Date.now()};if(Number.isFinite(a)&&a<=20)lopp();};
+    const viga=e=>{if(W!==w)return;if(e&&e.code===1){REFUS=true;lopetaW();}};
+    try{w.id=navigator.geolocation.watchPosition(uus,viga,{enableHighAccuracy:true,maximumAge:0});}catch(e){lopetaW();}
+  }
+  addEventListener('pagehide',lahkub);document.addEventListener('visibilitychange',peidus);
+  LW={lopeta(){lopetaW();AUTO=true;removeEventListener('pagehide',lahkub);document.removeEventListener('visibilitychange',peidus);}};
+  // Foto: vähendatakse canvases (EXIF ja GPS kaovad), foto GPS loetakse originaalist eraldi
+  let FOTO=null,FG=null,FN=0;
+  const fi=$('#lfoto'),fe=$('#lfeel'),fm=$('#lfimg');
+  function fotoVota(){FN++;FOTO=null;FG=null;fi.value='';fe.hidden=true;if(fm.src)URL.revokeObjectURL(fm.src);fm.removeAttribute('src');}
+  fi.onchange=async()=>{const f=fi.files&&fi.files[0];if(!f){fotoVota();return;}const n=++FN;FOTO=null;FG=null;let g=null;
+    try{g=exifGps(await f.slice(0,2097152).arrayBuffer());}catch(x){g=null;} if(n!==FN)return; FG=g;
+    try{const b=await vahenda(f);if(n!==FN)return;if(!b||b.size>2*1024*1024)throw new Error('suur');FOTO=b;if(fm.src)URL.revokeObjectURL(fm.src);fm.src=URL.createObjectURL(b);fe.hidden=false;}
+    catch(x){if(n!==FN)return;fotoVota();ol.innerHTML='<div class="viga">Seda fotot ei saanud kasutada. Saad saata ilma fotota.</div>';}};
+  $('#lfvota').onclick=fotoVota;
+  const vf=r=>r.viga==='foto liiga suur'||r.viga==='foto tüüp';
+  const vastus=r=>r.viga==='oota minut'?'Liiga tihti. Oota minut ja proovi uuesti.':r.viga==='tais'?'Omanik ei saa praegu sõnumeid vastu võtta. Proovi helistada või tule hiljem tagasi.':r.viga==='aegunud'?'Leht on aegunud. Skänni kood uuesti.':(r.viga&&/märki/.test(r.viga))?r.viga:'Saatmine ebaõnnestus. Proovi uuesti.';
+  nupp.onclick=async()=>{
+    const h={tekst:tk.value.trim(),kontakt:kk.value.trim()};
+    if(!h.tekst&&!h.kontakt&&!FOTO){ol.innerHTML='<div class="viga">Kirjuta, kus seade on, või lisa foto.</div>';return;}
+    const p=POS&&POS.p; if(p){AUTO=true;lopetaW();}
+    nupp.disabled=true; ol.innerHTML='<div class="vaike">Saadan…</div>';
+    const keha=p?Object.assign(koord(p),h,SAADETUD?{auto_saadetud:1}:{}):Object.assign({},h,REFUS?{puudub:'luba'}:navigator.geolocation?{}:{puudub:'tugi'});
+    let fotoga=!!FOTO,r;
+    if(fotoga){r=await postFoto(Object.assign({},keha,FG?{foto_lat:FG.lat,foto_lon:FG.lon,foto_aeg:FG.aeg||undefined}:{}),FOTO);if(vf(r)){fotoga=false;r=await post('/api/leid',keha);}}
+    else r=await post('/api/leid',keha);
+    if(!r.ok){nupp.disabled=false;ol.innerHTML='<div class="viga">'+esc(vastus(r))+'</div>';return;}
+    ol.innerHTML='<div class="ok">'+(r.teavitatud?'Saadetud. Aitäh!':'Salvestatud. Aitäh!')+'</div>';
+  };
+  const hl=$('#helista'); if(hl)hl.addEventListener('click',()=>beacon('/api/helista',{}));
+  $('#sisse').onclick=()=>{leidLopp();sisene(kood,'sisse');};
 }
 </script>${lisaJs(nonce, ver)}</body></html>`;
 }
@@ -537,7 +599,11 @@ function seaded(){const s=U.seaded;
   '<div><label>Foto võtmisel/tagastamisel'+(U.foto_olemas?'':' (R2 side FOTOD puudub, foto on välja lülitatud)')+'</label><select id="e_foto">'+['ei','valikuline','kohustuslik'].map(v=>'<option'+(s.foto===v?' selected':'')+'>'+v+'</option>').join('')+'</select></div>'+
   '<div><label class="mark"><input type="checkbox" id="e_tb"'+(s.taatlus_blokeerib?' checked':'')+'><span>Aegunud taatlusega seadet ei saa võtta</span></label></div></div><button class="roh" id="e_salv">Salvesta</button><div id="e_teade"></div>'+
   '<h2>📆 Kalender (Outlook / Google)</h2><div class="kaart"><p class="vaike">Taatluste tähtajad (meeldetuletus '+s.taatlus_hoiatus_paevi+' päeva ette) ja broneeringud. Outlookis: Kalender → Lisa kalender → Veebist → kleebi link. Link on salajane: kes selle saab, näeb seadmete nimesid ja broneerijaid.</p>'+
-  '<input id="k_link" readonly value="'+(s.kalender_token?esc(location.origin+'/api/kalender/'+s.kalender_token+'.ics'):'')+'" placeholder="Link puudub"><button id="k_loo">'+(s.kalender_token?'Loo uus link (vana lakkab töötamast)':'Loo kalendri link')+'</button> <button id="k_kop">Kopeeri</button></div>';
+  '<input id="k_link" readonly value="'+(s.kalender_token?esc(location.origin+'/api/kalender/'+s.kalender_token+'.ics'):'')+'" placeholder="Link puudub"><button id="k_loo">'+(s.kalender_token?'Loo uus link (vana lakkab töötamast)':'Loo kalendri link')+'</button> <button id="k_kop">Kopeeri</button></div>+
+  '<h2>🔔 Teavitused</h2><div class="kaart"><p class="vaike">Saadab testteate Telegrami (TG_BOT_TOKEN, TG_CHAT_ID) ja ntfy-sse (NTFY_TOPIC). Vea korral näed põhjust.</p><button id="t_test">Saada testteade</button><div id="t_teade"></div></div>';
+  $('#t_test').onclick=async()=>{$('#t_teade').innerHTML='<div class="vaike">Saadan…</div>';const j=await a('testteade',{});
+    const rida=(n,x)=>!x||!x.seatud?n+': seadistamata':x.ok?n+': saadetud ✓':n+': '+(x.viga||'ebaõnnestus');
+    $('#t_teade').innerHTML='<div class="'+(j.ok?'ok':'viga')+'">'+esc(j.tg?rida('Telegram',j.tg)+' · '+rida('ntfy',j.ntfy):(j.viga||'Viga'))+'</div>';};
   $('#k_loo').onclick=async()=>{if(s.kalender_token&&!confirm('Vana link lakkab töötamast. Jätkata?'))return;const j=await a('kalender',{uus:true});if(j.ok){U.seaded.kalender_token=j.token;seaded();}else alert(j.viga);};
   $('#k_kop').onclick=async()=>{try{await navigator.clipboard.writeText($('#k_link').value);$('#k_kop').textContent='Kopeeritud ✓';}catch(e){$('#k_link').select();}};
   $('#e_salv').onclick=async()=>{const j=await a('seaded',{firma:$('#e_firma').value,telefon:$('#e_tel').value.trim(),max_seadmeid:+$('#e_max').value,registreerimine:$('#e_reg').value,hoiata_paevi:+$('#e_hp').value,taatlus_hoiatus_paevi:+$('#e_tp').value,taatlus_blokeerib:$('#e_tb').checked,foto:$('#e_foto').value});

@@ -8,7 +8,22 @@ import { VERSIOON } from './versioon.js';
 
 export { Register };
 
-const BOT_UA = /\b(bot|crawler|spider|slurp|facebookexternalhit|whatsapp|telegram|slack|discord|preview|skype|linkedin|bingpreview|google-?inspectiontool)\b/i;
+// Botifilter (leiamind'ist): „bot“ ainult eraldiseisva sõnana (telefonibränd CUBOT ei sobi), lisaks eelvaated ja skriptid
+export const BOT_UA = new RegExp([
+  'crawler|spider|scraper|slurp|(?<![a-z])bot(?![a-z])',
+  '(googlebot|bingbot|applebot|telegrambot|twitterbot|linkedinbot|slackbot|discordbot|yandexbot|baiduspider|petalbot|semrushbot|ahrefsbot|duckduckbot|facebot|mj12bot)',
+  'facebookexternalhit|whatsapp|slack-imgproxy|skypeuripreview|bingpreview|linkpreview|embedly|google-inspectiontool|google-read-aloud',
+  '(^|[^a-z])(curl|wget)/|python-requests|go-http-client|headlesschrome',
+].join('|'), 'i');
+const LEIDJA_POST = new Set(['/api/leid', '/api/asukoht', '/api/helista']);
+// IP-põhine koht ainult serveri request.cf-ist: „linn, regioon, riik (teenusepakkuja)“
+const cfTekst = (x) => (typeof x === 'string' || typeof x === 'number' ? String(x).replace(/\s+/g, ' ').trim() : '');
+export function ipKohtTekst(cf = {}) {
+  const osad = [cf.city, cf.region, cf.country].map(cfTekst).filter(Boolean);
+  const org = cfTekst(cf.asOrganization);
+  const koht = osad.length ? osad.join(', ') : 'teadmata';
+  return (org ? `${koht} (${org})` : koht).slice(0, 160);
+}
 
 // Versioon: VERSIOON (käsitsi, src/versioon.js) + deploy'i id (CF_VERSION, wrangler.toml [version_metadata]; muutub iga deploy'ga)
 export const versioon = (env) => ({ v: VERSIOON, id: String(env.CF_VERSION?.id || '').slice(0, 8) });
@@ -38,11 +53,14 @@ export default {
       if (tee === '/robots.txt') return new Response('User-agent: *\nDisallow: /\n', { headers: { 'Content-Type': 'text/plain' } });
     }
     if (tee.startsWith('/api/')) {
-      if (tee === '/api/leid' && BOT_UA.test(request.headers.get('User-Agent') || '')) return new Response('{"ok":false}', { status: 403 });
+      const bot = BOT_UA.test(request.headers.get('User-Agent') || '');
+      if (bot && LEIDJA_POST.has(tee)) return new Response('{"ok":false}', { status: 403 });
       if (!env.REGISTER) return new Response('REGISTER binding puudub', { status: 500 });
       // Kliendi IP-d ei salvestata: DO saab ainult soolatud räsi (piirangute jaoks). Kliendi enda saadetud päis kirjutatakse üle.
       const h = new Headers(request.headers);
       h.set('X-IP-Rasi', await ipRasi(env, request.headers.get('CF-Connecting-IP') || ''));
+      h.set('X-Bot', bot ? '1' : '0');
+      h.set('X-IP-Koht', encodeURIComponent(ipKohtTekst(request.cf || {})));
       const req = new Request(request, { headers: h });
       const stub = env.REGISTER.get(env.REGISTER.idFromName('firma'));
       return stub.fetch(req);
