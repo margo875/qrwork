@@ -87,3 +87,11 @@ test('halduse partii CSV kliendikood neutraliseerib valemi', async () => {
   const { adminLeht } = await import('../src/lehed.js');
   assert.match(adminLeht('n'), /if\(\/\^\[=\+\\-@\\t\\r\]\/\.test\(x\)\)x="'"\+x/);
 });
+
+test('halduse seadmevormis on QR-skänner (sama lugeja mis rakenduses)', async () => {
+  const { adminLeht, appLeht } = await import('../src/lehed.js');
+  const h = adminLeht('n');
+  assert.match(h, /id=\\"s_skann\\"|id="s_skann"/);
+  assert.match(h, /function koodTekstist/); assert.match(h, /async function kaamera\(video,onTekst,teade\)/);
+  assert.match(appLeht('n', {}), /async function kaamera\(video,onTekst,teade\)/);
+});
