@@ -541,7 +541,7 @@ async function partiid(teade){
     if(!j.ok){$('#p_teade').innerHTML='<div class="viga">'+esc(j.viga)+'</div>';return;} partiid('<div class="ok">Loodud '+j.partii.koodid.length+' koodi.</div>');};
   document.querySelectorAll('[data-seo]').forEach(b=>b.onclick=()=>seoKood(b.dataset.seo));
   document.querySelectorAll('[data-pa]').forEach(b=>b.onclick=()=>{const p=PARTIID.find(x=>x.id===b.dataset.p);if(!p)return;const v=vabad(p),act=b.dataset.pa;
-    if(act==='csv'){const r=['kood;url;seade;inventarinr'].concat(p.koodid.map(k=>[k.kood,qrUrl('S',k.kood),k.nimi||'',k.invnr||''].map(x=>/[;"\\n]/.test(x)?'"'+x.replace(/"/g,'""')+'"':x).join(';')));alla('koodid-'+p.aeg+'.csv','\\ufeff'+r.join('\\r\\n'),'text/csv');return;}
+    if(act==='csv'){const r=['kood;url;seade;inventarinr'].concat(p.koodid.map(k=>[k.kood,qrUrl('S',k.kood),k.nimi||'',k.invnr||''].map(x=>{if(/^[=+\\-@\\t\\r]/.test(x))x="'"+x;return /[;"\\n\\r]/.test(x)?'"'+x.replace(/"/g,'""')+'"':x;}).join(';')));alla('koodid-'+p.aeg+'.csv','\\ufeff'+r.join('\\r\\n'),'text/csv');return;}
     if(!v.length){alert('Vabu koode pole.');return;}
     if(act==='silt')prindiSildid(v.map(k=>({kood:k,nimi:'',invnr:''})));
     else if(act==='kleebis')prindiKleebised(v);

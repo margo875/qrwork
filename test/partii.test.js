@@ -69,3 +69,21 @@ test('QR: Krativara URL suurtähtedega mahub versiooni 3 (29 moodulit), kleebise
     assert.match(f.kleebisReg(q, 'ABCDEFGHJK01', 'a', ''), /HJK01|JK01/);
   } finally { globalThis.window = w; }
 });
+
+test('lõplikult kustutatud seadme partiikood ei muutu uuesti vabaks; partii CSV valemisüst neutraliseeritud', async () => {
+  const { A, koht, c, reg, storage } = await alus();
+  const kood = (await A('partii', { kogus: 2 })).j.partii.koodid[0];
+  await A('seade', { nimi: '=HYPERLINK("x")', uus_kood: kood, asukoht: koht.kood });
+  assert.equal((await A('kustuta', { liik: 'seade', id: kood })).j.ok, true);
+  const x = await storage.get(`seade:${kood}`); x.kustutatud = Date.now() - 31 * 86400000; await storage.put(`seade:${kood}`, x);
+  await reg.lopetaKustutamine(Date.now());
+  const r = await c('/api/avalik', { kood });
+  assert.equal(r.j.sidumata, undefined);
+  assert.equal((await A('partiid')).j.partiid[0].koodid.find((k) => k.kood === kood).kustutatud, true);
+  assert.equal((await A('seade', { nimi: 'Uus', uus_kood: kood, asukoht: koht.kood })).status, 409);
+});
+
+test('halduse partii CSV kliendikood neutraliseerib valemi', async () => {
+  const { adminLeht } = await import('../src/lehed.js');
+  assert.match(adminLeht('n'), /if\(\/\^\[=\+\\-@\\t\\r\]\/\.test\(x\)\)x="'"\+x/);
+});

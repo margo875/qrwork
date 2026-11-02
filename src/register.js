@@ -742,7 +742,8 @@ export class Register {
     if (!l) {
       // Eeltrükitud (partii) kood, mis pole veel seadmega seotud: ei tokenit ega teadet
       const kk = normKood(kood);
-      if (kk && await this.s.get(`pkood:${kk}`) && !(await this.s.get(`seade:${kk}`))) return viga('See kood ei ole veel kasutusel.', 404, { sidumata: true });
+      const pk = kk ? await this.s.get(`pkood:${kk}`) : null;
+      if (pk && !pk.kasutatud && !(await this.s.get(`seade:${kk}`))) return viga('See kood ei ole veel kasutusel.', 404, { sidumata: true });
       return viga('Tundmatu kood.', 404);
     }
     const { kk, s } = l;
@@ -914,7 +915,9 @@ export class Register {
       const koodid = [];
       for (const k of p.koodid) {
         const sd = await this.s.get(`seade:${k}`);
-        koodid.push(sd ? { kood: k, nimi: sd.nimi, invnr: sd.invnr || '', kustutatud: !!sd.kustutatud } : { kood: k });
+        const pk = sd ? null : await this.s.get(`pkood:${k}`);
+        koodid.push(sd ? { kood: k, nimi: sd.nimi, invnr: sd.invnr || '', kustutatud: !!sd.kustutatud }
+          : pk?.kasutatud ? { kood: k, nimi: pk.seade || '?', invnr: '', kustutatud: true } : { kood: k });
       }
       l.push({ id, aeg: p.aeg, nimi: p.nimi || '', koodid });
     }
@@ -1010,6 +1013,7 @@ export class Register {
     if (!uus && !s) return viga('Seadet ei leitud', 404);
     if (uus && s) return viga('Selle koodiga seade on juba olemas.', 409);
     if (uus && kood && await this.s.get(`koht:${kood}`)) return viga('See kood on töökoha kood.', 409);
+    if (uus && kood && (await this.s.get(`pkood:${kood}`))?.kasutatud) return viga('See kleebis oli kustutatud seadmel. Kasuta uut koodi.', 409);
     if (uus && b.uus_kood && !kood) return viga('Vigane kood (12 märki, 0-9 A-Z ilma I L O U).');
     const nimi = puhasta(b.nimi, 80);
     if (nimi.length < 2) return viga('Sisesta seadme nimi.');
@@ -1130,6 +1134,7 @@ export class Register {
         if (nyyd - x.kustutatud < KUSTUTUS_MS) { const t = x.kustutatud + KUSTUTUS_MS; if (!jargmine || t < jargmine) jargmine = t; continue; }
         await this.s.delete(v);
         if (liik === 'seade') for (const p of [`marge:${x.kood}:`, `ajalugu:${x.kood}:`, `bron:${x.kood}:`, `taatlus:${x.kood}:`]) for (const [k2] of await this.loend(p)) await this.s.delete(k2);
+        if (liik === 'seade') { const pk = await this.s.get(`pkood:${x.kood}`); if (pk) await this.s.put(`pkood:${x.kood}`, { ...pk, kasutatud: true, seade: x.nimi }); } // partii kleebis on kasutatud: ei muutu uuesti vabaks
         if (liik === 'kasutaja') {
           if (x.tel && (await this.s.get(`tel:${x.tel}`)) === x.id) await this.s.delete(`tel:${x.tel}`);
           for (const [k2] of await this.kinnitamata(x.id)) await this.s.delete(k2);
