@@ -219,3 +219,73 @@ test('inventarinumber automaatselt, superkasutaja, laod, kataloogi QR', async ()
   const { koodTekstist } = await import('../src/lehed.js');
   assert.deepEqual(koodTekstist(`https://t.ee/I/${b1.kood}`, 't.ee'), { liik: 'I', kood: b1.kood });
 });
+
+test('kustutamine: 30 päeva taastatav, siis lõplik', async () => {
+  const { env, reg, mari, jaan, s1, s2, A, koht, storage } = await alus();
+  await mari('/api/vota', { koodid: [s1.kood] });
+  assert.equal((await A('kustuta', { liik: 'seade', id: s1.kood })).status, 409, 'kasutuses seadet ei kustuta');
+  assert.equal((await A('kustuta', { liik: 'koht', id: koht.kood })).status, 409, 'laos on seadmeid');
+  assert.equal((await A('kustuta', { liik: 'seade', id: s2.kood })).j.ok, true);
+  assert.equal((await mari('/api/seade', { kood: s2.kood })).status, 404);
+  assert.equal((await mari('/api/otsi', { q: 'Laser' })).j.tulemused.length, 0);
+  assert.equal((await mari('/api/vota', { koodid: [s2.kood] })).j.tulemused[0].ok, false);
+  assert.ok((await A('ulevaade')).j.seadmed.find((x) => x.kood === s2.kood).kustutatud, 'haldur näeb');
+  assert.equal((await A('taasta', { liik: 'seade', id: s2.kood })).j.ok, true);
+  assert.equal((await mari('/api/seade', { kood: s2.kood })).status, 200);
+  // kasutaja: sessioon kaob, sisselogimine ei õnnestu
+  const jid = (await jaan('/api/mina')).j.kasutaja.id;
+  assert.equal((await A('kustuta', { liik: 'kasutaja', id: jid })).j.ok, true);
+  assert.equal((await jaan('/api/mina')).status, 401);
+  assert.equal((await klient(env)('/api/logi-sisse', { tel: '+37255555555', parool: 'salasõna2' })).status, 401);
+  // 31 päeva hiljem: lõplik kustutamine, taastada ei saa, telefoni saab uuesti kasutada
+  await A('kustuta', { liik: 'seade', id: s2.kood });
+  await reg.lopetaKustutamine(Date.now() + 31 * 86400000);
+  assert.equal(await storage.get(`seade:${s2.kood}`), undefined);
+  assert.equal(await storage.get(`kasutaja:${jid}`), undefined);
+  assert.equal((await A('taasta', { liik: 'seade', id: s2.kood })).status, 404);
+  assert.equal((await klient(env)('/api/registreeru', { nimi: 'Jaan Uus', tel: '+37255555555', parool: 'qwerty1', koht: koht.kood })).status, 200);
+  assert.ok((await A('logi')).j.logi.some((x) => x.tyyp === 'lopp_kustutatud'));
+});
+
+test('broneerimine: kattuvus, teise broneeritud seadet ei saa võtta, hoidja hoiatus, tühistamine', async () => {
+  const { mari, jaan, s1, s2, A } = await alus();
+  const t = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Tallinn' });
+  const p = (n) => new Date(Date.parse(t) + n * 86400000).toISOString().slice(0, 10);
+  assert.equal((await mari('/api/broneeri', { kood: s1.kood, algus: p(-1), lopp: p(1) })).status, 400, 'minevik');
+  const b = await mari('/api/broneeri', { kood: s1.kood, algus: t, lopp: p(2), markus: 'Objekt X' });
+  assert.equal(b.j.ok, true);
+  assert.equal((await jaan('/api/broneeri', { kood: s1.kood, algus: p(1), lopp: p(3) })).status, 409, 'kattub');
+  let r = await jaan('/api/vota', { koodid: [s1.kood] });
+  assert.equal(r.j.tulemused[0].ok, false); assert.match(r.j.tulemused[0].viga, /broneeritud: Mari/);
+  assert.equal((await mari('/api/vota', { koodid: [s1.kood] })).j.tulemused[0].ok, true, 'broneerija ise saab');
+  // Jaan broneerib s2 homseks; Mari võtab s2 täna → Mari näeb hoiatust
+  await jaan('/api/broneeri', { kood: s2.kood, algus: p(1), lopp: p(1) });
+  r = await mari('/api/vota', { koodid: [s2.kood] });
+  assert.equal(r.j.tulemused[0].ok, true);
+  assert.equal(r.j.mina.seadmed.find((x) => x.kood === s2.kood).bron.nimi, 'Jaan Tamm');
+  // tühistamine: ainult oma (või super); haldur kõik
+  const jb = (await jaan('/api/mina')).j.broneeringud[0];
+  assert.equal((await mari('/api/bron-tyhista', { kood: s2.kood, id: jb.id })).status, 403);
+  assert.equal((await jaan('/api/bron-tyhista', { kood: s2.kood, id: jb.id })).j.ok, true);
+  assert.equal((await A('ulevaade')).j.broneeringud.length, 1);
+});
+
+test('taatlus: registreerimine, järgmine tähtaeg intervalliga, taatlusel olek, kalender', async () => {
+  const { env, mari, s1, A } = await alus();
+  await A('seade', { kood: s1.kood, nimi: 'Nivelliir', invnr: 'INV-1', taatlus_intervall: 12, olek: 'taatlusel' });
+  assert.match((await mari('/api/vota', { koodid: [s1.kood] })).j.tulemused[0].viga, /taatlusel/);
+  await mari('/api/marge', { kood: s1.kood, tyyp: 'taatlus' });
+  const r = await A('taatlus', { kood: s1.kood, kuupaev: '2026-11-01', tunnistus: 'T-123', tegija: 'Metrosert', tulemus: 'sobib' });
+  assert.equal(r.j.taatlus.jargmine, '2027-11-01'); assert.equal(r.j.seade.olek, 'aktiivne'); assert.equal(r.j.seade.taatlus_kuni, '2027-11-01');
+  assert.equal((await A('ulevaade')).j.margmed.length, 0, 'taatluse märkus lahendati');
+  const kaart = (await mari('/api/seade', { kood: s1.kood })).j.seade;
+  assert.equal(kaart.taatlus.tunnistus, 'T-123'); assert.equal(kaart.taatlus.tegija, 'Metrosert');
+  assert.equal((await A('taatlus', { kood: s1.kood, kuupaev: '2026-11-02', tulemus: 'ei_sobi' })).j.seade.olek, 'remondis');
+  // kalender
+  const tok = (await A('kalender', {})).j.token;
+  const { default: worker } = await import('../src/worker.js');
+  const ics = await worker.fetch(new Request(`https://t.ee/api/kalender/${tok}.ics`), env, {});
+  const txt = await ics.text();
+  assert.equal(ics.status, 200); assert.match(txt, /BEGIN:VCALENDAR/); assert.match(txt, /DTSTART;VALUE=DATE:20271101/);
+  assert.equal((await worker.fetch(new Request(`https://t.ee/api/kalender/${'A'.repeat(32)}.ics`), env, {})).status, 404);
+});
