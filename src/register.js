@@ -109,6 +109,14 @@ function kypsis(request, nimi) {
   return null;
 }
 const VEALOGI_MAX = 500, VEALOGI_AEG = 30 * 86400000;
+// Brauseri tunnus ainult üldkujul (brauser + OS), et vealogi ei aitaks kasutajat tuvastada
+export function lyhikeUa(ua) {
+  ua = String(ua || '');
+  const os = /Android/.test(ua) ? 'Android' : /iPhone|iPad|iPod/.test(ua) ? 'iOS' : /Windows/.test(ua) ? 'Windows' : /Mac OS X/.test(ua) ? 'macOS' : /Linux/.test(ua) ? 'Linux' : 'muu';
+  const b = /Edg\/(\d+)/.exec(ua) || /SamsungBrowser\/(\d+)/.exec(ua) || /(?:Chrome|CriOS)\/(\d+)/.exec(ua) || /(?:Firefox|FxiOS)\/(\d+)/.exec(ua) || /Version\/(\d+).*Safari/.exec(ua);
+  const nimi = !b ? 'muu' : /Edg/.test(b[0]) ? 'Edge' : /Samsung/.test(b[0]) ? 'Samsung' : /Chrome|CriOS/.test(b[0]) ? 'Chrome' : /Firefox|FxiOS/.test(b[0]) ? 'Firefox' : 'Safari';
+  return `${nimi}${b ? ' ' + b[1] : ''} / ${os}`;
+}
 const json = (obj, status = 200, lisa = {}) => new Response(JSON.stringify(obj), {
   status, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', ...lisa },
 });
@@ -292,7 +300,7 @@ export class Register {
       return viga('tundmatu tee', 404);
     } catch (e) {
       console.error('qrwork viga', e && e.stack || e);
-      try { await this.veaLogi({ liik: 'server', teade: String(e && e.message || e), stack: String(e && e.stack || ''), leht: tee }); } catch (e2) { /* logi ei tohi päringut murda */ }
+      try { if (!this.piiratud('vigaserver', 100, 3600000)) { this.viga('vigaserver'); await this.veaLogi({ liik: 'server', teade: String(e && e.message || e), stack: String(e && e.stack || ''), leht: tee.replace(/^\/api\/kalender\/.*/, '/api/kalender/…') }); } } catch (e2) { /* logi ei tohi päringut murda */ }
       return viga('serveri viga', 500);
     }
   }
@@ -305,9 +313,12 @@ export class Register {
     const k = {
       aeg: nyyd, liik: o.liik === 'server' ? 'server' : 'klient', teade: t(o.teade, 500), stack: t(o.stack, 2000),
       leht: t(String(o.leht || '').split(/[?#]/)[0], 100), fail: t(String(o.fail || '').split(/[?#]/)[0], 200),
-      rida: Number(o.rida) | 0, veerg: Number(o.veerg) | 0, v: t(o.v, 20), id: t(o.id, 20), ua: t(o.ua, 300),
+      rida: Number(o.rida) | 0, veerg: Number(o.veerg) | 0, v: t(o.v, 20), id: t(o.id, 20), ua: lyhikeUa(o.ua),
     };
     await this.s.put(`viga:${inv(nyyd)}:${juhuslik(4)}`, k);
+    // Koristus iga 20. kirje järel (mitte igal kirjutamisel)
+    this.vigaKirjeid = (this.vigaKirjeid || 0) + 1;
+    if (this.vigaKirjeid % 20 !== 1) return;
     const vead = await this.loend('viga:');
     for (const [i, [voti, x]] of vead.entries()) if (i >= VEALOGI_MAX || nyyd - (x?.aeg || 0) > VEALOGI_AEG) await this.s.delete(voti);
   }
@@ -324,7 +335,7 @@ export class Register {
     if (this.piiratud(`dev:${ip}`, 10)) return viga('Liiga palju vigaseid katseid.', 429);
     const tok = this.env.DEV_TOKEN;
     const auth = request.headers.get('Authorization') || '';
-    if (!tok || tok.length < 16 || !vordle(auth, `Bearer ${tok}`)) { this.viga(`dev:${ip}`); return viga(tok ? 'Vale arendaja võti.' : 'DEV_TOKEN pole seadistatud.', 401); }
+    if (!tok || tok.length < 16 || tok === this.env.ADMIN_TOKEN || !vordle(auth, `Bearer ${tok}`)) { this.viga(`dev:${ip}`); return viga('Vale arendaja võti.', 401); }
     if (request.method === 'GET' && tee === 'vead') {
       const nyyd = Date.now();
       const vead = (await this.loend('viga:')).map(([, x]) => x).filter((x) => nyyd - x.aeg <= VEALOGI_AEG).map((x) => ({ ...x, aeg_tekst: eestiAeg(x.aeg) }));

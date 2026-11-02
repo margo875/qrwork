@@ -84,7 +84,7 @@ Siis `/admin` → Seaded (firma nimi) → Töökohad (lisa, prindi plakat) → S
 ## Versioon, vealogi, avakuva (0.3.0)
 - **Versioon:** `src/versioon.js` (tõsta iga sisulise muudatusega) + deploy'i id (`[version_metadata]`). Näha iga lehe jaluses.
 - **„Uus versioon, värskenda“:** leht kontrollib `/api/versioon` iga 5 min ja rakendusse naastes; kui deploy on muutunud, tuleb alla riba.
-- **Vealogi (ainult arendajale):** brauseri vead ja serveri erindid → `/dev` (võti `DEV_TOKEN`, haldur ei näe). Säilib 30 päeva, kuni 500 kirjet, piir 20 tunnis IP kohta. Ei salvestata kasutaja nime, telefoni ega IP-d. Lisaks Workers Logs (`[observability]`) Cloudflare'i paneelis.
+- **Vealogi (ainult arendajale):** brauseri vead ja serveri erindid → `/dev` (võti `DEV_TOKEN`, haldur ei näe). Säilib 30 päeva, kuni 500 kirjet, piir 20 tunnis IP kohta (serveri vead 100 tunnis). Salvestub: veateade, stack, lehe tee, versioon, brauser + OS üldkujul. Ei salvestata kasutaja nime, telefoni ega IP-d. `DEV_TOKEN` peab erinema `ADMIN_TOKEN`-ist. Lisaks Workers Logs (`[observability]`) Cloudflare'i paneelis.
 - **Avakuvale (PWA):** manifest + ikoonid. Android Chrome: jaluses nupp „Lisa avakuvale“ (või brauseri menüü); iPhone: Jaga → Lisa avakuvale. Võrguta tööd (service worker) pole.
 
 ## Turvalisus ja privaatsus

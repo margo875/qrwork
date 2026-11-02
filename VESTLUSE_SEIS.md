@@ -22,4 +22,5 @@
 **Margo teha:** krativara.ee tsoon Cloudflare'i (nimeserverid); `wrangler secret put DEV_TOKEN` (või Cloudflare → Worker → Settings → Variables); liita haru main'i.
 **Ootel:** aadressi lõplik kuju (qrp. vs muu) enne printimist; eraldi Cloudflare'i konto alles piirangute korral.
 
-**Järgmine samm:** sõltumatu ülevaatus (alamagent), siis Margo liidab.
+**Sõltumatu ülevaatus (Opus) tehtud**, keskmised ja madalad leiud parandatud (kalendri võti logist välja, serveri logi piir, UA üldkujul, manifest).
+**Järgmine samm:** Margo teeb punktid (tsoon, DEV_TOKEN) ja liidab.

@@ -44,6 +44,10 @@ test('vealogi: klient saab kirjutada, ainult DEV_TOKEN loeb; haldur ei loe', asy
   assert.equal(j.vead[0].teade, 'TypeError x');
   assert.equal(j.vead[0].leht, '/S/ABC', 'päringuosa ei salvestu');
   assert.equal(j.vead[0].liik, 'klient');
+  assert.equal(j.vead[0].ua, 'muu / muu');
+  const { lyhikeUa } = await import('../src/register.js');
+  assert.equal(lyhikeUa('Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36'), 'Chrome 131 / Android');
+  assert.equal(lyhikeUa('Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1'), 'Safari 17 / iOS');
   // ilma X-QW päiseta ei võeta vastu
   const r = await worker.fetch(new Request('https://t.ee/api/viga', { method: 'POST', body: '{"teade":"x"}' }), env, {});
   assert.equal(r.status, 403);
@@ -62,9 +66,13 @@ test('vealogi: ilma DEV_TOKEN-ita suletud; üleujutuse piir 20/h IP kohta', asyn
 test('vealogi: serveri erind logitakse, vanemad kui 30 p kustuvad', async () => {
   const { env, reg, storage } = keskkond();
   await reg.veaLogi({ liik: 'server', teade: 'vana' }, Date.now() - 31 * 86400000);
+  reg.vigaKirjeid = 0; // järgmine kirjutamine koristab
   reg.kasutaja = async () => { throw new Error('katki'); };
   const r = await post(env, '/api/mina', {});
+  reg.kalender = async () => { throw new Error('kal'); };
+  await worker.fetch(new Request('https://t.ee/api/kalender/' + 'A'.repeat(32) + '.ics'), env, {});
+  assert.ok(![...storage.m.values()].some((v) => v && String(v.leht || '').includes('AAAA')), 'kalendri võti ei jõua logisse');
   assert.equal(r.status, 500);
   const vead = [...storage.m.entries()].filter(([k]) => k.startsWith('viga:')).map(([, v]) => [v.liik, v.teade, v.leht]);
-  assert.deepEqual(vead, [['server', 'katki', '/api/mina']]);
+  assert.deepEqual(vead.map((v) => v[2]).sort(), ['/api/kalender/…', '/api/mina']);
 });

@@ -15,7 +15,7 @@ export const versioon = (env) => ({ v: VERSIOON, id: String(env.CF_VERSION?.id |
 const MANIFEST = JSON.stringify({
   name: 'Krativara', short_name: 'Krativara', lang: 'et', start_url: '/', scope: '/', display: 'standalone',
   background_color: '#f3f4f6', theme_color: '#1d4ed8',
-  icons: [{ src: '/ikoon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any maskable' }, { src: '/ikoon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' }],
+  icons: ['any', 'maskable'].flatMap((purpose) => [{ src: '/ikoon-192.png', sizes: '192x192', type: 'image/png', purpose }, { src: '/ikoon-512.png', sizes: '512x512', type: 'image/png', purpose }]),
 });
 const IKOONID = { '/ikoon-192.png': IKOON_192, '/ikoon-512.png': IKOON_512, '/apple-touch-icon.png': IKOON_180 };
 const png = (b64) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
