@@ -18,3 +18,19 @@
 **Märkus:** teine lõim („QR-põhine digivõti süsteem“) kirjutas samasse repos harusse `claude/qr-digital-key-system-z0mhov` (docs/); see on eraldi projekt, mitte Kratt.
 
 **Järgmine samm:** Margo vastab otsustele 1–3; uues lõimes alusta sellest failist ja README-st.
+
+## Lisa 02.11.2026 (Nõuniku teated selle lõimesse, Margo otse kinnitamata siin lõimes)
+- **Nimi „Krativara“, domeen krativara.kindavel.ee**, vana kratt.kindavel.ee suunab edasi (Margo Nõuniku lõimes: „Jah, uus aadress ka“).
+- Pakkuja Kindavel OÜ, tööandja P.P. Ehitusjärelevalve OÜ, töölepingus IT-arendust pole.
+- Õigusdokumendid valmis: margo875/advisor, haru claude/pilv-too, `teadmised/krativara/` (dok 03 p 6 = avatud küsimused, dok 04 tekst A/B = privaatsusteave, dok 06 = kasutustingimused).
+- **8 tootemuudatust enne katset** (Nõunik; privaatsusteavet ei avaldata enne):
+  1. leidja lehel GPS-linnuke vaikimisi välja + lause, kuhu asukoht läheb ja kui kaua hoitakse;
+  2. teavitustest töötaja telefon välja (registreerimine, ülevõtt, märkus, vaidlus, leiuteade); Telegrami sendLocation välja; IP-linna ei salvestata, kui leidja asukohta ei luba;
+  3. automaatsed säilitusajad (DO alarm, seadetes muudetav): logi vaikimisi 24 kuud (max 3 a) → nimi anonüümseks; leiuteated 90 p; lahkunud töötaja nimi/telefon anonüümseks 12 kuu (puudujäägita 30 p) pärast; „hoia“ märge vaidluse/puudujäägi ridadele (TLS § 74 lg 4);
+  4. R2 fotode elutsükkel 6 kuud;
+  5. ntfy ainult tokeniga (eelistatult EL), DO ja R2 jurisdiktsioon EL;
+  6. domeen krativara.kindavel.ee; iga klient = oma paigaldus;
+  7. registreerimisvormile nõustumise linnuke + lingid kasutustingimustele ja privaatsusteabele; leidja lehele lühike privaatsusteave;
+  8. halduses täielik JSON-eksport.
+- Lisaks varem pakutud: versiooninumber + „uus versioon“ riba, varjatud vealogi, PWA.
+- NB DO jurisdiktsioon: olemasoleva DO asukohta ei saa muuta; EL-i jaoks uus namespace (`idFromName` + `jurisdiction('eu')`) → andmete ülekanne või uus algus (katseandmed). [KONTROLLIMATA]
