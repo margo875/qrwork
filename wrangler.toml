@@ -2,10 +2,14 @@ name = "qrwork"
 main = "src/worker.js"
 compatibility_date = "2025-06-01"
 
-# Domeen: kratt.kindavel.ee (Margo otsus 01.11.2026, rakenduse nimi „Kratt“). kindavel.ee DNS on samas Cloudflare'i kontos,
-# custom_domain loob DNS-kirje ja sertifikaadi esimesel deploy'l. QR-kleebistes on aadress püsivalt, seda ei muudeta.
-# qrwork.kindavel.ee (esimene katsedomeen) eemaldatud 01.11.2026 (Margo).
-routes = [{ pattern = "kratt.kindavel.ee", custom_domain = true }]
+# Domeen: krativara.kindavel.ee (Margo otsus 02.11.2026, toote nimi „Krativara“; advisor teadmised/krativara/KAVA.md „Nimi“,
+# 03 „Avatud küsimused“ p 6.6). Vana kratt.kindavel.ee jääb marsruudiks ja suunab Workeris (308) uuele aadressile.
+# kindavel.ee DNS on samas Cloudflare'i kontos; custom_domain loob DNS-kirje ja sertifikaadi esimesel deploy'l.
+# QR-kleebistes on aadress püsivalt: prindi kleebised alles uue aadressiga.
+routes = [
+  { pattern = "krativara.kindavel.ee", custom_domain = true },
+  { pattern = "kratt.kindavel.ee", custom_domain = true },
+]
 workers_dev = false
 
 # Kõik andmed (register, kasutajad, laenud, logi) on ühes Durable Objectis (SQLite, tasuta plaanil lubatud).
@@ -13,18 +17,26 @@ workers_dev = false
 name = "REGISTER"
 class_name = "Register"
 
+# Andmete asukoht EL-is (advisor teadmised/krativara/03 „Avatud küsimused“ p 1 ja p 6.5): Durable Object luuakse EL-i
+# jurisdiktsioonis. NB: see annab uue, tühja andmebaasi; varasem (katse)andmebaas jääb alles ja on tagasi kasutusel, kui
+# rea eemaldad. Kontrolli pärast deploy'd, et leht avaneb (jurisdiktsiooni saadavus tasuta plaanil [KONTROLLIMATA]).
+[vars]
+ANDMETE_ASUKOHT = "eu"
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["Register"]
 
-# Valikuline: fotod võtmisel/tagastamisel/märkusega. Loo: npx wrangler r2 bucket create qrwork-fotod
-# Ilma selle plokita on foto funktsioon välja lülitatud.
+# Valikuline: fotod võtmisel/tagastamisel/märkusega. Loo EL-is: npx wrangler r2 bucket create qrwork-fotod --jurisdiction eu
+# Ilma selle plokita on foto funktsioon välja lülitatud. Fotode säilitusaja (vaikimisi 6 kuud) rakendab Worker ise
+# (src/sailitus.js), et juhtumiga seotud fotod jääksid alles: ära sea bucket'ile eraldi elutsükli reeglit.
 # [[r2_buckets]]
 # binding = "FOTOD"
 # bucket_name = "qrwork-fotod"
+# jurisdiction = "eu"
 
 # Saladused (mitte siia faili!):
 #   npx wrangler secret put ADMIN_TOKEN     (≥ 16 märki, nt openssl rand -base64 32)
 #   npx wrangler secret put TOKEN_SECRET    (≥ 16 märki; IP-räsi sool)
-#   valikuline: TG_BOT_TOKEN + TG_CHAT_ID (Telegram), NTFY_TOPIC (+ NTFY_TOKEN, NTFY_URL)
+#   valikuline: TG_BOT_TOKEN + TG_CHAT_ID (Telegram), NTFY_TOPIC + NTFY_TOKEN (kohustuslik) + NTFY_URL (eelistatult EL-i server)
 #   valikuline: PBKDF2_ITER (10000–100000, vaikimisi 100000; vt README „Parool ja CPU“)

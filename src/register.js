@@ -13,7 +13,9 @@
 //   logi:<inv>:<r>, ajalugu:<kood>:<inv>:<r>   sündmused (inv = TS_MAX − aeg, uusimad ees)
 //   koht:<kood>                  töökoht (töökoha QR)
 //   seaded                       firma seaded
-import { teavita } from './teavita.js';
+import { teavita, teavitusKanalid } from './teavita.js';
+import { SAILITUS_PIIRID, sailitusKontroll, anonuumiRida, anonuumiIsik } from './sailitus.js';
+import { andmedEL, leidjaTekst } from './oigus.js';
 
 export const TAHED = '0123456789ABCDEFGHJKMNPQRSTVWXYZ'; // Crockford Base32, ilma I L O U
 export const KOOD_RE = /^[0-9A-HJKMNP-TV-Z]{12}$/;
@@ -21,6 +23,10 @@ const ID_RE = /^[0-9A-HJKMNP-TV-Z]{10}$/;
 const TS_MAX = 9999999999999;
 const SESS_MS = 180 * 24 * 3600 * 1000;
 const LAHTESTUS_MS = 24 * 3600 * 1000;
+const PAEV_MS = 24 * 3600 * 1000;
+const KUU_MS = 30.44 * PAEV_MS;
+export const ANON = 'endine kasutaja';
+const VAIDLUS_MARGE = new Set(['kahjustus', 'tarvik', 'ei_toota']); // kahju / puudujääk: seotud read on kaitstud kuni lahenduseni
 const PARTII_MAX = 30;              // seadmeid ühes võtmises/tagastuses
 export const MARKE_TYYBID = {
   ei_toota: 'Ei tööta',
@@ -38,6 +44,17 @@ export const VAIKESEADED = {
   hoiata_paevi: 14,           // halduse ülevaates: kasutuses kauem kui N päeva
   taatlus_hoiatus_paevi: 30,  // seadme kaardil hoiatus N päeva enne taatluse tähtaega
   foto: 'valikuline',         // 'ei' | 'valikuline' | 'kohustuslik' (foto võtmisel ja tagastamisel; vajab R2 sidet FOTOD)
+  // Säilitusajad (advisor teadmised/krativara/05 jaotis 6, 03 lisa 1, 04 tekst A; Klient võib muuta, vt src/sailitus.js)
+  sail_logi_kuud: 24,         // logiread: siis nimi anonüümitakse („endine kasutaja“)
+  sail_max_kuud: 36,          // lahendamata vaidluse/kahju/puudujäägiga seotud read: kuni lahenduseni, kuid mitte üle 3 aasta (TLS § 74 lg 4)
+  sail_foto_kuud: 6,          // fotod R2-s
+  sail_leid_paevi: 90,        // leiuteade
+  sail_leid_tagasi_paevi: 30, // leiuteade: N päeva pärast seadme tagasisaamist (tagastus), kui see on varem
+  sail_bron_paevi: 30,        // broneering pärast lõppu
+  sail_lahkunud_kuud: 12,     // lahkunud töötaja nimi ja telefon anonüümitakse N kuu pärast
+  sail_lahkunud_korras_paevi: 30, // … või N päeva pärast, kui seadmete üleandmine oli korras (puudujäägita)
+  // Privaatsusteabe ja tingimuste andmed (src/oigus.js; tühi väli = lehel märge „[täitmata]“)
+  registrikood: '', aadress: '', andmekaitse_kontakt: '', dpo: '', edastus_alus: '', tingimused_kehtib: '',
 };
 const FOTO_MAX = 1.5 * 1024 * 1024;
 export const KUSTUTUS_MS = 30 * 24 * 3600 * 1000; // kustutatud kirje on 30 päeva taastatav, siis kustutatakse lõplikult
@@ -183,8 +200,8 @@ export class Register {
     return (await this.loend('laen:')).map(([, l]) => l).filter((l) => l.kasutaja === id);
   }
   iter() { const n = Number(this.env.PBKDF2_ITER); return Number.isInteger(n) && n >= 10000 && n <= 100000 ? n : 100000; }
-  teavitaTaustal(tekst, gps) {
-    const p = teavita(this.env, tekst, gps).catch(() => {});
+  teavitaTaustal(tekst) {
+    const p = teavita(this.env, tekst).catch(() => {});
     if (this.state.waitUntil) this.state.waitUntil(p);
     return p;
   }
@@ -251,6 +268,9 @@ export class Register {
     const url = new URL(request.url);
     const tee = url.pathname;
     try {
+      // Säilitusaegade igapäevane kontroll (DO alarm). Esimesel päringul pärast käivitust veendutakse, et alarm on seatud.
+      if (!this.alarmSeatud) { this.alarmSeatud = true; await this.seaAlarm(Date.now() + PAEV_MS); }
+      if (tee === '/api/oigus' && request.method === 'GET') return await this.oigusInfo();
       if (tee.startsWith('/api/admin/')) return await this.admin(request, tee.slice(11), url);
       const ics = /^\/api\/kalender\/([0-9A-Z]{32})\.ics$/.exec(tee);
       if (ics && request.method === 'GET') return await this.kalender(ics[1]);
@@ -302,7 +322,7 @@ export class Register {
     return json({ ok: true, firma: seaded.firma, koht: kohtK ? { kood: kohtK.kood, nimi: kohtK.nimi } : null, mina: k ? await this.mina(k) : null });
   }
 
-  async registreeru({ nimi, tel, parool, koht }, ip) {
+  async registreeru({ nimi, tel, parool, koht, noustun }, ip) {
     if (this.piiratud(`reg:${ip}`, 10, 3600 * 1000)) return viga('Liiga palju katseid, proovi hiljem.', 429);
     const kk = normKood(koht || '');
     const kohtK = kk ? await this.elus(`koht:${kk}`) : null;
@@ -313,16 +333,17 @@ export class Register {
     if (!t) return viga('Vigane telefoninumber (nt 5123 4567 või +372 5123 4567).');
     if (typeof parool !== 'string' || parool.length < 6 || parool.length > 128) return viga('Parool peab olema 6–128 märki.');
     if (await this.s.get(`tel:${t}`)) return viga('See number on juba registreeritud. Logi sisse.', 409);
+    if (noustun !== true) return viga('Kinnita, et oled tutvunud kasutustingimuste ja privaatsusteabega.');
     this.viga(`reg:${ip}`); // iga registreerimine loeb piiri sisse
     const seaded = await this.seaded();
     const reg = kohtK.registreerimine || seaded.registreerimine;
     let id;
     do id = juhuslik(10); while (await this.s.get(`kasutaja:${id}`));
-    const k = { id, nimi, tel: t, rasi: await parooliRasi(parool, this.iter()), olek: reg === 'kinnitamisega' ? 'ootel' : 'aktiivne', loodud: Date.now(), koht: kk, hilinenud: 0 };
+    const k = { id, nimi, tel: t, rasi: await parooliRasi(parool, this.iter()), olek: reg === 'kinnitamisega' ? 'ootel' : 'aktiivne', loodud: Date.now(), koht: kk, hilinenud: 0, tingimused: Date.now() };
     await this.s.put(`kasutaja:${id}`, k);
     await this.s.put(`tel:${t}`, id);
     await this.logi({ tyyp: 'registreerus', kasutaja: id, nimi, koht: kk });
-    if (k.olek === 'ootel') this.teavitaTaustal(`👤 Uus kasutaja ootab kinnitust: ${nimi}, ${t} (${kohtK.nimi})`);
+    if (k.olek === 'ootel') this.teavitaTaustal(`👤 Uus kasutaja ootab kinnitust: ${nimi} (${kohtK.nimi})`);
     return json({ ok: true, mina: await this.mina(k) }, 200, { 'Set-Cookie': await this.uusSessioon(id) });
   }
 
@@ -462,7 +483,7 @@ export class Register {
           liik: 'ulevott', kood, seadme_nimi: seade.nimi, alates: laen.alates, aeg: nyyd, uus: this.avalikKasutaja(k),
         });
         await this.logi({ tyyp: 'ulevott', kood, kasutaja: k.id, nimi: k.nimi, eelmine: laen.kasutaja, eelmise_nimi: eelmine?.nimi, koht: kohtOk, aeg: nyyd });
-        this.teavitaTaustal(`🔁 Ülevõtt: ${seade.nimi} (${seade.invnr || kood})\nOli: ${eelmine?.nimi} alates ${eestiAeg(laen.alates)} (tagastust ei registreeritud)\nVõttis: ${k.nimi}, ${k.tel}`);
+        this.teavitaTaustal(`🔁 Ülevõtt: ${seade.nimi} (${seade.invnr || kood})\nOli: ${eelmine?.nimi} alates ${eestiAeg(laen.alates)} (tagastust ei registreeritud)\nVõttis: ${k.nimi}`);
       }
       await this.s.put(`laen:${kood}`, { kood, kasutaja: k.id, alates: nyyd, koht: kohtOk });
       await this.logi({ tyyp: 'vott', kood, kasutaja: k.id, nimi: k.nimi, koht: kohtOk, aeg: nyyd, foto });
@@ -528,7 +549,7 @@ export class Register {
     await this.s.put(`marge:${kk}:${inv(aeg)}:${juhuslik(4)}`, { aeg, kasutaja: k.id, nimi: k.nimi, tyyp, tekst, foto, lahendatud: false });
     await this.logi({ tyyp: 'marge', kood: kk, kasutaja: k.id, nimi: k.nimi, marge: tyyp, tekst, aeg, foto });
     await this.fotoKasutatud(foto);
-    if (TEAVITA_MARGE.has(tyyp)) this.teavitaTaustal(`⚠️ ${MARKE_TYYBID[tyyp]}: ${seade.nimi} (${seade.invnr || kk})\n${k.nimi}, ${k.tel}${tekst ? `\n„${tekst}“` : ''}`);
+    if (TEAVITA_MARGE.has(tyyp)) this.teavitaTaustal(`⚠️ ${MARKE_TYYBID[tyyp]}: ${seade.nimi} (${seade.invnr || kk})\n${k.nimi}${tekst ? `\n„${tekst}“` : ''}`);
     return json({ ok: true });
   }
 
@@ -552,7 +573,7 @@ export class Register {
     } else {
       await this.s.put(`vaidlus:${inv(aeg)}:${juhuslik(4)}`, { ...x, eelmine: this.avalikKasutaja(k), tekst, vaidlus_aeg: aeg, lahendatud: false });
       await this.logi({ tyyp: 'vaidlus', kood: x.kood, kasutaja: k.id, nimi: k.nimi, uus: x.uus?.nimi, tekst, aeg });
-      this.teavitaTaustal(`❗ Vaidlus: ${x.seadme_nimi}\n${k.nimi} (${k.tel}) ei nõustu, et ${x.uus?.nimi} ${x.liik === 'ulevott' ? 'võttis seadme üle' : 'märkis selle tagastatuks'}.\n„${tekst}“`);
+      this.teavitaTaustal(`❗ Vaidlus: ${x.seadme_nimi}\n${k.nimi} ei nõustu, et ${x.uus?.nimi} ${x.liik === 'ulevott' ? 'võttis seadme üle' : 'märkis selle tagastatuks'}.\n„${tekst}“`);
     }
     return json({ ok: true, mina: await this.mina(k) });
   }
@@ -582,7 +603,7 @@ export class Register {
     const e = (v) => String(v || '').replace(/\\/g, '\\\\').replace(/[,;]/g, (m) => '\\' + m).replace(/\r?\n/g, '\\n');
     const pv = (d) => d.replace(/-/g, '');
     const jargmine = (d) => new Date(Date.parse(d) + 86400000).toISOString().slice(0, 10).replace(/-/g, '');
-    const tl = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Kratt//kratt.kindavel.ee//ET', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH', `X-WR-CALNAME:${e(seaded.firma)} – Kratt`, 'X-WR-TIMEZONE:Europe/Tallinn'];
+    const tl = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Krativara//krativara.kindavel.ee//ET', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH', `X-WR-CALNAME:${e(seaded.firma)} – Krativara`, 'X-WR-TIMEZONE:Europe/Tallinn'];
     const stamp = new Date().toISOString().replace(/[-:]/g, '').slice(0, 15) + 'Z';
     for (const [, s] of await this.elusLoend('seade:')) {
       if (s.olek === 'maha' || !s.taatlus_kuni) continue;
@@ -669,7 +690,7 @@ export class Register {
     const s = kk ? await this.elus(`seade:${kk}`) : null;
     const seaded = await this.seaded();
     if (!s) return viga('Tundmatu kood.', 404);
-    return json({ ok: true, firma: seaded.firma, nimi: s.nimi, invnr: s.invnr || '', telefon: seaded.telefon || '' });
+    return json({ ok: true, firma: seaded.firma, nimi: s.nimi, invnr: s.invnr || '', telefon: seaded.telefon || '', kanalid: teavitusKanalid(this.env), leid_paevi: seaded.sail_leid_paevi, privaatsus: leidjaTekst(await this.oigusAndmed()) });
   }
   async leid(request, { kood, tekst, kontakt, lat, lon, tapsus }) {
     const kk = normKood(kood);
@@ -688,10 +709,10 @@ export class Register {
     await this.logi({ tyyp: 'leiuteade', leidkood: kk, tekst, kontakt, gps, linn }); // leidkood: ei lähe seadme ajalukku (L1)
     await this.teavitaTaustal([
       `📦 Leiuteade: ${s.nimi} (${s.invnr || kk})`,
-      kellel ? `Registreeritud: ${kellel.nimi}, ${kellel.tel}` : 'Seade ei ole kellegi nimel.',
+      kellel ? `Registreeritud: ${kellel.nimi}` : 'Seade ei ole kellegi nimel.',
       tekst && `Leidja: „${tekst}“`, kontakt && `Kontakt: ${kontakt}`, linn && `Umbkaudu (IP): ${linn}`,
       gps && `📍 https://maps.google.com/?q=${gps.lat},${gps.lon}${gps.tapsus ? ` (±${gps.tapsus} m)` : ''}`,
-    ].filter(Boolean).join('\n'), gps);
+    ].filter(Boolean).join('\n'));
     return json({ ok: true });
   }
 
@@ -707,6 +728,7 @@ export class Register {
       if (tee === 'logi') return json({ ok: true, logi: await this.logiLoe(url.searchParams.get('kood'), 300) });
       if (tee === 'seadmed.csv') return this.seadmedCsv();
       if (tee === 'logi.csv') return this.logiCsv();
+      if (tee === 'eksport.json') return this.eksport(url.searchParams.get('kasutaja'));
       if (tee === 'taatlused') { const kk = normKood(url.searchParams.get('kood') || ''); return json({ ok: true, taatlused: kk ? (await this.loend(`taatlus:${kk}:`, 50)).map(([, x]) => x) : [] }); }
       if (tee === 'foto') {
         const v = url.searchParams.get('k') || '';
@@ -735,13 +757,27 @@ export class Register {
       case 'taatlus': return this.adminTaatlus(b);
       case 'bron-tyhista': return this.bronTyhista(null, b, true);
       case 'kalender': return this.adminKalender(b);
+      case 'hoia': return this.adminHoia(b);
+      case 'sailitus': return json({ ok: true, tulemus: await this.sailitus() });
     }
     return viga('tundmatu', 404);
   }
 
   async logiLoe(kood, max) {
     const kk = kood ? normKood(kood) : null;
-    return (await this.loend(kk ? `ajalugu:${kk}:` : 'logi:', max)).map(([, x]) => x);
+    return (await this.loend(kk ? `ajalugu:${kk}:` : 'logi:', max)).map(([v, x]) => ({ ...x, voti: v.split(':').slice(-2).join(':') }));
+  }
+  // „Hoia“ märge: puudujäägi, kao, kahju või vaidlusega seotud logirida (ja selle foto) ei anonüümita ega kustutata, kuni märge
+  // eemaldatakse (nõude korral menetluse lõpuni). Advisor teadmised/krativara/03 „Avatud küsimused“ p 6.3, 05 jaotis 6.
+  async adminHoia({ voti, hoia }) {
+    if (typeof voti !== 'string' || !/^\d{13}:[0-9A-Z]{4}$/.test(voti)) return viga('vigane võti');
+    const x = await this.s.get(`logi:${voti}`);
+    if (!x) return viga('Ei leitud', 404);
+    if (hoia) x.hoia = Date.now(); else delete x.hoia;
+    await this.s.put(`logi:${voti}`, x);
+    if (x.kood) { const a = await this.s.get(`ajalugu:${x.kood}:${voti}`); if (a) { if (hoia) a.hoia = x.hoia; else delete a.hoia; await this.s.put(`ajalugu:${x.kood}:${voti}`, a); } }
+    await this.logi({ tyyp: hoia ? 'hoia_lisatud' : 'hoia_eemaldatud', kood: x.kood || x.leidkood, nimi: 'haldur', tekst: `${eestiAeg(x.aeg)} ${x.tyyp}` });
+    return json({ ok: true });
   }
 
   async ulevaade() {
@@ -767,7 +803,7 @@ export class Register {
     for (const [, b] of await this.loend('bron:')) if (b.lopp >= t) broneeringud.push({ ...b, nimi: kasutajad.get(b.kasutaja)?.nimi || '?', tel: kasutajad.get(b.kasutaja)?.tel || '', seade: seadmed.find((x) => x.kood === b.kood)?.nimi || '?' });
     broneeringud.sort((a, b) => (a.algus < b.algus ? -1 : 1));
     const viimane = (await this.loend('logi:', 1)).map(([, x]) => x.aeg)[0] || 0;
-    return { ok: true, seaded, foto_olemas: !!this.env.FOTOD, kohad, seadmed, kasutajad: kas, kinnitused, vaidlused, margmed, broneeringud, logi_viimane: viimane };
+    return { ok: true, seaded, sailitus_viimati: (await this.s.get('sailitus_viimati')) || null, kanalid: teavitusKanalid(this.env), foto_olemas: !!this.env.FOTOD, kohad, seadmed, kasutajad: kas, kinnitused, vaidlused, margmed, broneeringud, logi_viimane: viimane };
   }
 
   async adminSeade(b) {
@@ -908,7 +944,127 @@ export class Register {
     }
     if (jargmine) await this.seaAlarm(jargmine);
   }
-  async alarm() { await this.lopetaKustutamine(); }
+  async alarm() {
+    await this.lopetaKustutamine();
+    await this.sailitus();
+    await this.seaAlarm(Date.now() + PAEV_MS);
+  }
+
+  // ---------- säilitusajad (advisor teadmised/krativara/03 „Avatud küsimused“ p 6.3, 6.4, 6.8; 05 jaotis 6) ----------
+  // Käivitub kord päevas DO alarmiga (ja halduses nupuga). Tagastab loendurid.
+  async sailitus(nyyd = Date.now()) {
+    const s = await this.seaded();
+    const t = { logi_anon: 0, leid_kustutatud: 0, marge_anon: 0, vaidlus_anon: 0, bron_kustutatud: 0, kasutaja_anon: 0, foto_kustutatud: 0, sess_kustutatud: 0 };
+    const logiPiir = nyyd - s.sail_logi_kuud * KUU_MS;
+    const maxPiir = nyyd - s.sail_max_kuud * KUU_MS;
+    // Kaitstud seadmed: lahendamata vaidlus, kahju- või puudujäägimärkus, vastamata ülevõtt
+    const kaitstud = new Set();
+    for (const [, v] of await this.loend('vaidlus:')) if (!v.lahendatud && v.kood) kaitstud.add(v.kood);
+    for (const [v, m] of await this.loend('marge:')) if (!m.lahendatud && VAIDLUS_MARGE.has(m.tyyp)) kaitstud.add(v.split(':')[1]);
+    for (const [, k] of await this.loend('kinnita:')) if (k.kood) kaitstud.add(k.kood);
+    const kaitstudFotod = new Set();
+    // Seadme viimane tagastus (leiuteate „seade tagasi“ jaoks)
+    const tagastus = new Map();
+    const logi = await this.loend('logi:');
+    for (const [, x] of logi) if (x.kood && (x.tyyp === 'tagastus' || x.tyyp === 'tagastus_teise_eest' || x.tyyp === 'tagastus_halduri_poolt') && !(tagastus.get(x.kood) > x.aeg)) tagastus.set(x.kood, x.aeg);
+    for (const [v, x] of logi) {
+      const suffiks = v.slice(5);
+      if (x.tyyp === 'leiuteade') {
+        if (x.hoia) continue;
+        const tagasi = tagastus.get(x.leidkood);
+        const vana = nyyd - x.aeg >= s.sail_leid_paevi * PAEV_MS;
+        const tagasiAmmu = tagasi && tagasi > x.aeg && nyyd - tagasi >= s.sail_leid_tagasi_paevi * PAEV_MS;
+        if (vana || tagasiAmmu) { await this.s.delete(v); t.leid_kustutatud++; }
+        continue;
+      }
+      const hoitud = x.hoia || (x.kood && kaitstud.has(x.kood) && x.aeg > maxPiir);
+      if (hoitud) { if (x.foto) kaitstudFotod.add(x.foto); continue; }
+      if (x.anon || x.aeg > logiPiir) continue;
+      const y = anonuumiRida(x, nyyd);
+      await this.s.put(v, y);
+      if (x.kood && await this.s.get(`ajalugu:${x.kood}:${suffiks}`)) await this.s.put(`ajalugu:${x.kood}:${suffiks}`, y);
+      t.logi_anon++;
+    }
+    // Lahendatud märkused ja vaidlused: nimi ja telefon anonüümitakse logiga sama aja järel
+    for (const [v, m] of await this.loend('marge:')) {
+      if (!m.lahendatud) { if (m.foto) kaitstudFotod.add(m.foto); continue; }
+      if (m.anon || m.aeg > logiPiir) continue;
+      await this.s.put(v, { ...m, nimi: m.nimi ? 'endine kasutaja' : m.nimi, kasutaja: '', anon: nyyd }); t.marge_anon++;
+    }
+    for (const [v, x] of await this.loend('vaidlus:')) {
+      if (!x.lahendatud || x.anon || (x.vaidlus_aeg || x.aeg) > logiPiir) continue;
+      await this.s.put(v, { ...x, uus: anonuumiIsik(x.uus), eelmine: anonuumiIsik(x.eelmine), anon: nyyd }); t.vaidlus_anon++;
+    }
+    // Broneeringud: N päeva pärast lõppu
+    const bronPiir = new Date(nyyd - s.sail_bron_paevi * PAEV_MS).toLocaleDateString('sv-SE', { timeZone: 'Europe/Tallinn' });
+    for (const [v, b] of await this.loend('bron:')) if (b.lopp < bronPiir) { await this.s.delete(v); t.bron_kustutatud++; }
+    // Lahkunud töötaja: nimi ja telefon anonüümitakse
+    for (const [v, k] of await this.loend('kasutaja:')) {
+      if (!k.lahkunud || k.anon) continue;
+      const aeg = k.lahkunud_korras ? s.sail_lahkunud_korras_paevi * PAEV_MS : s.sail_lahkunud_kuud * KUU_MS;
+      if (nyyd - k.lahkunud < aeg) continue;
+      if ((await this.minuLaenud(k.id)).length) continue; // seade on veel tema nimel: ei anonüümi, haldur lahendab
+      if (k.tel && (await this.s.get(`tel:${k.tel}`)) === k.id) await this.s.delete(`tel:${k.tel}`);
+      await this.s.put(v, { ...k, nimi: 'endine kasutaja', tel: '', anon: nyyd });
+      t.kasutaja_anon++;
+    }
+    // Aegunud sessioonid
+    for (const [v, x] of await this.loend('sess:')) if (x.aegub < nyyd) { await this.s.delete(v); t.sess_kustutatud++; }
+    // Fotod (R2): N kuud; kaitstud juhtumi fotod jäävad
+    const fotoPiir = nyyd - s.sail_foto_kuud * KUU_MS;
+    for (const [v, f] of await this.loend('foto:')) if (f.aeg < fotoPiir) await this.s.delete(v); // kasutamata üleslaadimised
+    if (this.env.FOTOD) {
+      let cursor;
+      do {
+        const r = await this.env.FOTOD.list({ prefix: 'f/', cursor, limit: 1000 });
+        for (const o of r.objects || []) {
+          const m = /^f\/[0-9A-Z]{10}\/(\d{13})-/.exec(o.key);
+          const aeg = m ? Number(m[1]) : (o.uploaded ? +new Date(o.uploaded) : nyyd);
+          if (aeg < fotoPiir && !kaitstudFotod.has(o.key)) { await this.env.FOTOD.delete(o.key); t.foto_kustutatud++; }
+        }
+        cursor = r.truncated ? r.cursor : undefined;
+      } while (cursor);
+    }
+    await this.s.put('sailitus_viimati', { aeg: nyyd, ...t });
+    return t;
+  }
+
+  // ---------- täielik eksport (advisor teadmised/krativara/02 p 10.2, 03 p 6.2 ja „Avatud küsimused“ p 6.8) ----------
+  // Kõik andmed JSON-ina; ?kasutaja=<id> = ühe isiku andmed (andmesubjekti taotlus). Paroolide ja sessioonide räsid ei lähe.
+  async eksport(kid) {
+    const id = kid && ID_RE.test(kid) ? kid : null;
+    if (kid && !id) return viga('vigane kasutaja');
+    const kaarti = async (p) => (await this.loend(p)).map(([v, x]) => ({ voti: v, ...x }));
+    const kasutajad = (await this.loend('kasutaja:')).map(([, { rasi, lahtestus, ...k }]) => k);
+    let a = {
+      seaded: (({ kalender_token, ...x }) => x)(await this.seaded()),
+      laod: await kaarti('koht:'), seadmed: await kaarti('seade:'), kasutajad,
+      laenud: await kaarti('laen:'), logi: await kaarti('logi:'), margmed: await kaarti('marge:'), vaidlused: await kaarti('vaidlus:'),
+      kinnitused: await kaarti('kinnita:'), broneeringud: await kaarti('bron:'), taatlused: await kaarti('taatlus:'), fotod: [],
+    };
+    if (this.env.FOTOD) {
+      let cursor;
+      do { const r = await this.env.FOTOD.list({ prefix: id ? `f/${id}/` : 'f/', cursor, limit: 1000 }); for (const o of r.objects || []) a.fotod.push(o.key); cursor = r.truncated ? r.cursor : undefined; } while (cursor);
+    }
+    if (id) {
+      const k = kasutajad.find((x) => x.id === id);
+      if (!k) return viga('Kasutajat ei leitud', 404);
+      const minu = (x) => x.kasutaja === id || x.eelmine === id;
+      a = { kasutaja: k, laenud: a.laenud.filter(minu), logi: a.logi.filter(minu), margmed: a.margmed.filter(minu),
+        vaidlused: a.vaidlused.filter((x) => x.uus?.id === id || x.eelmine?.id === id), kinnitused: a.kinnitused.filter((x) => x.voti.startsWith(`kinnita:${id}:`)),
+        broneeringud: a.broneeringud.filter(minu), fotod: a.fotod };
+    }
+    const keha = JSON.stringify({ versioon: 1, aeg: new Date().toISOString(), ulatus: id ? `kasutaja ${id}` : 'kõik andmed', fotod_markus: 'Fotod: GET /api/admin/foto?k=<võti>', ...a }, null, 1);
+    return new Response(keha, { headers: { 'Content-Type': 'application/json; charset=utf-8', 'Content-Disposition': `attachment; filename="${id ? `kasutaja-${id}` : 'krativara-eksport'}.json"`, 'Cache-Control': 'no-store' } });
+  }
+
+  // Privaatsusteabe ja tingimuste lehtede andmed (src/oigus.js). Isikuandmeid ei sisalda.
+  async oigusAndmed() {
+    const s = await this.seaded();
+    const v = ['firma', 'telefon', 'max_seadmeid', 'registreerimine', 'foto', 'registrikood', 'aadress', 'andmekaitse_kontakt', 'dpo', 'edastus_alus', 'tingimused_kehtib', ...Object.keys(SAILITUS_PIIRID)];
+    return { seaded: Object.fromEntries(v.map((k) => [k, s[k]])), foto: this.fotoReziim(s), kanalid: teavitusKanalid(this.env), kalender: !!s.kalender_token, el: andmedEL(this.env) };
+  }
+  async oigusInfo() { return json({ ok: true, ...(await this.oigusAndmed()) }); }
 
   async adminKoht(b) {
     const uus = !b.kood;
@@ -930,9 +1086,21 @@ export class Register {
     return json({ ok: true, koht: kirje });
   }
 
-  async adminKasutaja({ id, olek, super: superK }) {
+  async adminKasutaja({ id, olek, super: superK, lahkunud, korras }) {
     const k = typeof id === 'string' && ID_RE.test(id) ? await this.s.get(`kasutaja:${id}`) : null;
     if (!k) return viga('Kasutajat ei leitud', 404);
+    // Lahkunud töötaja: konto peatatakse, parooli räsi, taastuskood ja sessioonid kustutatakse; nimi ja telefon
+    // anonüümitakse säilitusaja järel (src/sailitus.js). Advisor teadmised/krativara/05 jaotis 6, 04 tekst A.
+    if (lahkunud === true) {
+      if (k.anon) return viga('Kasutaja andmed on juba anonüümitud.');
+      const n = (await this.minuLaenud(id)).length;
+      k.olek = 'blokeeritud'; k.lahkunud = Date.now(); k.lahkunud_korras = korras === true && n === 0;
+      delete k.rasi; delete k.lahtestus;
+      await this.s.put(`kasutaja:${id}`, k);
+      for (const [v, s] of await this.loend('sess:')) if (s.kasutaja === id) await this.s.delete(v);
+      await this.logi({ tyyp: 'kasutaja_lahkunud', kasutaja: id, nimi: k.nimi, tekst: k.lahkunud_korras ? 'üleandmine korras' : (n ? `nimel ${n} seadet` : '') });
+      return json({ ok: true, seadmeid: n });
+    }
     if (olek === undefined && typeof superK === 'boolean') {
       k.super = superK;
       await this.s.put(`kasutaja:${id}`, k);
@@ -940,7 +1108,9 @@ export class Register {
       return json({ ok: true });
     }
     if (!['aktiivne', 'blokeeritud'].includes(olek)) return viga('vigane olek');
+    if (k.anon && olek === 'aktiivne') return viga('Anonüümitud kontot ei saa aktiveerida. Kasutaja registreerugu uuesti.');
     k.olek = olek;
+    if (olek === 'aktiivne') { delete k.lahkunud; delete k.lahkunud_korras; }
     await this.s.put(`kasutaja:${id}`, k);
     if (olek === 'blokeeritud') for (const [v, s] of await this.loend('sess:')) if (s.kasutaja === id) await this.s.delete(v);
     await this.logi({ tyyp: olek === 'aktiivne' ? 'kasutaja_kinnitatud' : 'kasutaja_peatatud', kasutaja: id, nimi: k.nimi });
@@ -993,6 +1163,10 @@ export class Register {
     if (b.taatlus_blokeerib !== undefined) s.taatlus_blokeerib = !!b.taatlus_blokeerib;
     if (b.foto !== undefined) { if (!['ei', 'valikuline', 'kohustuslik'].includes(b.foto)) return viga('vigane foto valik'); s.foto = b.foto; }
     for (const v of ['hoiata_paevi', 'taatlus_hoiatus_paevi']) if (b[v] !== undefined) { const n = Number(b[v]); if (!Number.isInteger(n) || n < 0 || n > 365) return viga(`${v} 0–365`); s[v] = n; }
+    for (const [v, [min, max]] of Object.entries(SAILITUS_PIIRID)) if (b[v] !== undefined) { const n = Number(b[v]); if (!Number.isInteger(n) || n < min || n > max) return viga(`${v} ${min}–${max}`); s[v] = n; }
+    const sv = sailitusKontroll(s); if (sv) return viga(sv);
+    for (const v of ['registrikood', 'aadress', 'andmekaitse_kontakt', 'dpo', 'edastus_alus']) if (b[v] !== undefined) s[v] = puhasta(b[v], 200);
+    if (b.tingimused_kehtib !== undefined) { if (b.tingimused_kehtib !== '' && !kuupaev(b.tingimused_kehtib)) return viga('Vigane kehtivuse kuupäev (AAAA-KK-PP).'); s.tingimused_kehtib = b.tingimused_kehtib; }
     await this.s.put('seaded', s);
     return json({ ok: true, seaded: s });
   }

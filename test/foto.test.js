@@ -12,7 +12,7 @@ async function alus(lisa) {
   const koht = (await A('koht', { nimi: 'Ladu', registreerimine: 'vaba' })).j.koht;
   const s1 = (await A('seade', { nimi: 'Nivelliir', asukoht: koht.kood })).j.seade;
   const c = klient(k.env);
-  await c('/api/registreeru', { nimi: 'Mari Maasikas', tel: '51234567', parool: 'salasõna', koht: koht.kood });
+  await c('/api/registreeru', { nimi: 'Mari Maasikas', tel: '51234567', parool: 'salasõna', koht: koht.kood, noustun: true });
   return { ...k, A, s1, c };
 }
 const yles = (env, c, keha) => worker.fetch(new Request('https://t.ee/api/foto', { method: 'POST', headers: { 'Content-Type': 'image/jpeg', 'X-QW': '1', Cookie: c.kyps }, body: keha }), env, {});
