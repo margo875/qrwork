@@ -23,6 +23,11 @@ class_name = "Register"
 [vars]
 ANDMETE_ASUKOHT = "eu"
 
+# Cloudflare'i eelvaate ehitus (`npx wrangler preview`, PR-ide kontroll „Workers Builds“) nõuab iga [vars] muutuja
+# jaoks eraldi eelvaate väärtust. Eelvaade ei kasuta toodangu andmebaasi.
+[previews.vars]
+ANDMETE_ASUKOHT = "eu"
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["Register"]
