@@ -1,6 +1,6 @@
-# Kratt (repo qrwork)
+# Krativara (repo qrwork)
 
-**Kratt** – Eesti muistendi abiline, kes hoiab peremehe vara, toob ja viib. Tööriistade ja mõõteseadmete register töökohale: **leia mind**, **seadmete register** ja **võtmine/tagastamine** QR-koodiga.
+**Krativara** (endine Kratt) – Eesti muistendi abiline, kes hoiab peremehe vara, toob ja viib. Tööriistade ja mõõteseadmete register töökohale: **leia mind**, **seadmete register** ja **võtmine/tagastamine** QR-koodiga.
 Cloudflare Worker + üks Durable Object (SQLite), sõltuvusi pole. Lähtekoht on leiamind'i ülesehitus (QR-generaator, teavitused, turvapõhimõtted).
 
 ## Kuidas see töötab
@@ -60,7 +60,7 @@ Vahekaardil on punane number või täpp, kui seal on üle vaatamata infot: **Ül
 - Ei saa kustutada: seadet, mis on kellegi nimel; kasutajat, kelle nimel on seadmeid; ladu, mis on mõne seadme koduladu.
 
 ## Foto (valikuline)
-Foto võtmisel, tagastamisel ja märkusega (nt kahjustuse tõendamiseks vaidluses). Vajab R2 sidet `FOTOD` (`wrangler.toml`, plokk on kommenteeritud). Seadetes: `ei` / `valikuline` / `kohustuslik`. Telefon vähendab foto (≤ 1600 px JPEG, EXIF ja GPS kaovad); server kontrollib tüüpi ja suurust (≤ 1,5 MB). Fotot näeb ainult haldur (logi ja märkused, „📷 foto“). Säilitusaeg: sea R2 bucket'ile elutsükli reegel (nt 365 päeva) Cloudflare'i juhtpaneelis.
+Foto võtmisel, tagastamisel ja märkusega (nt kahjustuse tõendamiseks vaidluses). Vajab R2 sidet `FOTOD` (`wrangler.toml`, plokk on kommenteeritud). Seadetes: `ei` / `valikuline` / `kohustuslik`. Telefon vähendab foto (≤ 1600 px JPEG, EXIF ja GPS kaovad); server kontrollib tüüpi ja suurust (≤ 1,5 MB). Fotot näeb ainult haldur (logi ja märkused, „📷 foto“). Säilitusaeg: vaikimisi 6 kuud, rakendab Worker ise (vt „Privaatsus ja säilitus“); juhtumiga seotud foto jääb. Ära sea bucket'ile eraldi elutsükli reeglit.
 
 ## Haldus `/admin` (ADMIN_TOKEN)
 - **Ülevaade:** vaidlused, kinnitust ootavad kasutajad, kinnitamata ülevõtud (keelu eemaldamine), märkused (lahendamine), taatlus aegub/aegunud, kasutuses seadmed (päevade arv, üle `hoiata_paevi` punasena, „Tagasta (haldur)“).
@@ -78,15 +78,33 @@ npx wrangler secret put TOKEN_SECRET      # openssl rand -base64 32
 npm run deploy
 ```
 Siis `/admin` → Seaded (firma nimi) → Töökohad (lisa, prindi plakat) → Seadmed (lisa, prindi sildid).
-**Domeen: `kratt.kindavel.ee`** (Margo otsus 01.11.2026; `wrangler.toml` `routes`; `qrwork.kindavel.ee` eemaldati 01.11.2026; sellele viitavad katsekleebised enam ei tööta). QR sisaldab aadressi püsivalt (`HTTPS://<DOMEEN>/S/<KOOD>`, suurtähtedega, alfanumeeriline režiim, veaparandus Q).
+**Domeen: `krativara.kindavel.ee`** (Margo otsus 02.11.2026; `wrangler.toml` `routes`). Vana `kratt.kindavel.ee` suunab (308) uuele ja vanade kleebiste QR-i loeb rakendus edasi. `qrwork.kindavel.ee` eemaldati 01.11.2026. QR sisaldab aadressi püsivalt (`HTTPS://<DOMEEN>/S/<KOOD>`, suurtähtedega, alfanumeeriline režiim, veaparandus Q).
 
 ## Turvalisus ja privaatsus
 - Parool: PBKDF2-SHA256 (vaikimisi 100 000 iteratsiooni, 16-baidine sool). Sessioon: juhuslik 40-märgine token, serveris ainult SHA-256 räsi, küpsis `HttpOnly; Secure; SameSite=Lax`. API nõuab päist `X-QW: 1` (CSRF).
 - Vigaste sisselogimiste piir: 8 telefoni ja 30 IP kohta 15 minutis; haldus 10 viga; registreerimine 10 tunnis IP kohta. Loendurid on DO mälus (kaovad DO taaskäivitusel, rünnaku ajal DO töötab).
 - IP-d ei salvestata (piirangu võti on soolatud räsi). CSP nonce'iga, välist koodi ei laeta, `X-Frame-Options: DENY`, kaamera ja asukoht ainult oma lehel.
-- **Isikuandmed:** kasutaja nimi ja telefon on nähtavad kolleegidele (kelle käes seade on) ja haldurile; see on registreerimisel öeldud. Logi säilib DO-s piiramata ajaga; kui vaja, lisa säilitustähtaeg (ettepanek allpool).
+- **Isikuandmed:** kasutaja nimi ja telefon on nähtavad kolleegidele (kelle käes seade on) ja haldurile; see on registreerimisel öeldud. Säilitusajad: vt „Privaatsus ja säilitus“.
 - **Parool ja CPU [KONTROLLIMATA]:** tasuta plaani CPU-piir päringu kohta võib PBKDF2 100 000 iteratsiooniga ületada (viga 1102 sisselogimisel). Siis sea `PBKDF2_ITER` väiksemaks (nt 30000); vanad paroolid töötavad edasi (iteratsioonide arv on räsis).
 - Durable Objectide SQLite tasuta plaanil ja `new_sqlite_classes` süntaks on mälu järgi [KONTROLLIMATA]; kontrolli <https://developers.cloudflare.com/durable-objects/> enne esimest deploy'd.
+
+## Privaatsus ja säilitus
+Õiguslik alus ja tekstid: repo `margo875/advisor`, `teadmised/krativara/` (03 isikuandmete töötlemise leping, 04 privaatsusteave, 05 õiguslik alus ja säilitusajad, 06 kasutustingimused). Toote muudatused vastavad dokumendi 03 „Avatud küsimused“ p 6.1–6.8.
+- **Lehed** `/privaatsus` (töötaja tekst A, `#leidja` tekst B) ja `/tingimused`. Kliendi andmed (registrikood, aadress, andmekaitse kontakt, DPO, edastuse alus, kehtivuse kuupäev) tulevad Haldus → Seaded; täitmata väli on lehel kollase märkena. Registreerimisel on kohustuslik linnuke „Olen tutvunud kasutustingimuste ja privaatsusteabega“ (aeg salvestatakse kasutaja kirjesse `tingimused`).
+- **Leidja leht:** asukoha linnuke on vaikimisi väljas; selle all lause, kuhu asukoht läheb ja kui kaua seda hoitakse; vormi all lühike privaatsusteave ja täistekst.
+- **Teavitused** ei sisalda telefoninumbreid; Telegrami eraldi asukohasõnumit ei saadeta (leidja asukoht on tekstis lingina). ntfy saadetakse ainult `NTFY_TOKEN`-iga; eelista EL-i serverit (`NTFY_URL`).
+- **Säilitus** (Durable Objecti alarm kord päevas; Haldus → Seaded → „Käivita kohe“). Vaikimisi, seadetes muudetav:
+  | Andmed | Vaikimisi |
+  |---|---|
+  | logiread: nimi → „endine kasutaja“, kasutaja id-d ja leidja kontakt välja (ka seadme ajalugu, lahendatud märkused ja vaidlused) | 24 kuud |
+  | „hoia“ märkega logirida (Logi → veerg „Säilitus“) | kuni märke eemaldamiseni |
+  | lahendamata vaidluse, kahju-/puudujäägimärkuse või vastamata ülevõtuga seadme read | kuni lahenduseni, ülempiir 36 kuud |
+  | fotod (R2) | 6 kuud (hoia/juhtumi foto jääb) |
+  | leiuteade | 90 päeva või 30 päeva pärast seadme tagastust |
+  | broneering | 30 päeva pärast lõppu |
+  | lahkunud töötaja (Kasutajad → **Lahkunud**: parool ja sessioonid kohe välja) | nimi ja telefon anonüümseks 12 kuu pärast, korras üleandmisel 30 päeva pärast |
+- **Eksport:** Logi → **Täielik eksport (JSON)** (seadmed, laod, kasutajad, laenud, logi, märkused, vaidlused, kinnitused, broneeringud, taatlused, fotode võtmed; paroolide räsideta); Kasutajad → **⬇ Andmed** = ühe isiku andmed (andmesubjekti taotlus).
+- **Andmete asukoht:** `ANDMETE_ASUKOHT = "eu"` (`wrangler.toml` `[vars]`) → Durable Object EL-i jurisdiktsioonis; R2 bucket loo `--jurisdiction eu`. Jurisdiktsiooni muutmine annab uue tühja andmebaasi (vana jääb alles).
 
 ## QR-lugeja
 Brauseri `BarcodeDetector` (Android Chrome), selle puudumisel `/jsqr.js` (jsQR 1.4.0, Apache-2.0, iPhone Safari jt). Kaamera nõuab HTTPS-i. Kui kaamera luba puudub, saab koodi sisestada käsitsi (sildil). Kontrollitud: Chromium võltskaameraga (jsQR-tee) loeb seadme QR-i, võõras domeen / suvaline tekst annab „Tundmatu QR-kood“, töökoha QR annab juhise. Päris telefonidega (iPhone, Android) ei ole veel proovitud.
@@ -95,10 +113,9 @@ Brauseri `BarcodeDetector` (Android Chrome), selle puudumisel `/jsqr.js` (jsQR 1
 ```
 npm test
 ```
-Node 22 sisseehitatud testijooksja: registreerimine ja sisselogimine, mitu seadet ja juurde võtmine, ülevõtt ja keeld, vaidlus, tagastus teise eest, remont/taatlus/limiit, märkused, foto (R2 asendus), lehed ja CSP.
+Node 22 sisseehitatud testijooksja: registreerimine ja sisselogimine, mitu seadet ja juurde võtmine, ülevõtt ja keeld, vaidlus, tagastus teise eest, remont/taatlus/limiit, märkused, foto (R2 asendus), lehed ja CSP; privaatsus (`test/privaatsus.test.js`: leidja linnuke, teavitused ilma telefonita, ntfy võti, säilitus ja anonüümimine, lahkunud töötaja, fotode kustutamine, vana domeen, tingimustega nõustumine, eksport).
 
 ## Edasiarendus (ettepanekud)
 - Kasutaja teavitus ülevõtust (SMS või ntfy kasutaja kaupa); praegu näeb ta seda järgmisel avamisel.
-- Logi säilitustähtaeg ja isikuandmete kustutamine lahkunud töötajal.
 - Broneerimine (seade homseks objektile) ja tagastustähtaeg seadme kaupa.
 - Seadme komplekt (nt tahhümeeter + statiiv + latt) ühe QR-iga.
