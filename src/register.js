@@ -5,6 +5,9 @@
 //   seade:<kood>                 registrikirje (muudab ainult haldur); ostuandmed ja dokumendid (seade.dokumendid) näeb ainult haldur
 //   dok:<R2 võti>                üles laaditud, seadmega veel sidumata dokument (seotakse seadme salvestamisel)
 //   ai:<AAAA-KK-PP>              pildilugemiste arv sel päeval (kulude piir)
+//   hooldaja:<id>                hooldusfirma (kontakt, arve andmed); seade.hooldaja = vaikimisi hooldaja
+//   too:<id>                     hoolduse töökäsk (seade, hooldaja, rike, sissekanded, failid, olek); seade.too = avatud töökäsk
+//   htoken:<sha256(link)>        töökäsu lingi indeks → töökäsu id; hsess:<sha256(token)> hooldaja sessioon (küpsis qw_hool)
 //   laen:<kood>                  kehtiv kasutus {kood, kasutaja, alates, koht}; puudub = seade on vaba
 //   kasutaja:<id>, tel:<+372…>   kasutaja ja telefoni indeks
 //   sess:<sha256(token)>         sessioon (küpsis qw_sess, 180 päeva)
@@ -15,6 +18,7 @@
 //   logi:<inv>:<r>, ajalugu:<kood>:<inv>:<r>   sündmused (inv = TS_MAX − aeg, uusimad ees)
 //   koht:<kood>                  töökoht (töökoha QR)
 //   seaded                       firma seaded
+import { TOO_PAEVI, TOO_PAEVI_MAX, PIN_VEAD_MAX, HSESS_MS, HFAIL_MAX, HFAIL_ARV, HKIRJE_ARV, HFAIL_LIIGID, HKIRJE_LIIGID, ETTEPANEKUD, HFAIL_RE, looPin, pinNorm, pinVorm, hooldajaValjad, kirjeValjad } from './hooldus.js';
 import { AI_MUDEL, AI_PAEVAS, AI_PILT_MAX, AI_JUHIS, DOK_MAX, DOK_ARV_MAX, DOK_LIIGID, DOK_RE, DOK_MIME, dokTyyp, aiJson, dokValjad, hindArvuks } from './dokumendid.js';
 import { teavita } from './teavita.js';
 
@@ -268,6 +272,7 @@ export class Register {
       if (tee.startsWith('/api/dev/')) return await this.dev(request, tee.slice(9));
       const ics = /^\/api\/kalender\/([0-9A-Z]{32})\.ics$/.exec(tee);
       if (ics && request.method === 'GET') return await this.kalender(ics[1]);
+      if (request.method === 'GET' && tee === '/api/hooldus/fail') return await this.hFailVaata(request, url);
       if (request.method !== 'POST') return viga('meetod', 405);
       // Leidja sendBeacon-päringud (asukoht lehelt lahkumisel, „Helista“): sendBeacon ei saa päist lisada. Kaitse on skännitoken
       // kehas (HMAC, 1 h), küpsist ei kasutata, seega CSRF-i ohtu pole.
@@ -279,6 +284,7 @@ export class Register {
       // CSRF: ainult JSON ja oma päis (teine sait ei saa neid ilma CORS-eelkontrollita saata)
       if (request.headers.get('X-QW') !== '1') return viga('päis puudub', 403);
       if (tee === '/api/foto') return await this.fotoUles(request);
+      if (tee === '/api/hooldus/fail') return await this.hFailUles(request, url);
       if (tee === '/api/leid' && /^multipart\/form-data/i.test(request.headers.get('Content-Type') || '')) return await this.leid(request, null);
       const keha = await loeJson(request);
       if (keha === null) return viga('vigane päring', 413);
@@ -291,6 +297,10 @@ export class Register {
         case '/api/avalik': return await this.avalik(request, keha);
         case '/api/leid': return await this.leid(request, keha);
         case '/api/viga': return await this.kliendiViga(keha, ip);
+        case '/api/hooldus/pin': return await this.hPin(keha, ip);
+        case '/api/hooldus/link': return await this.hLink(keha, ip);
+        case '/api/hooldus/too': case '/api/hooldus/kirje': case '/api/hooldus/kirje-eemalda': case '/api/hooldus/fail-eemalda': case '/api/hooldus/valmis': case '/api/hooldus/valja':
+          return await this.hooldajaParing(request, tee.slice(13), keha);
       }
       const k = await this.kasutaja(request);
       if (!k) return viga('Logi sisse', 401);
@@ -775,7 +785,10 @@ export class Register {
       await this.logi({ tyyp: 'skann', leidkood: kk, ip_koht: koht, seade_ua: sd, aeg: nyyd });
       this.teavitaTaustal([`🔔 Silti skänniti: ${s.nimi} (${s.invnr || kk})`, `Aeg: ${eestiAeg(nyyd)}`, `Asukoht (IP järgi, umbkaudne): ${koht}`, `Seade: ${sd}`].join('\n'));
     }
-    return json({ ok: true, firma: seaded.firma, nimi: s.nimi, invnr: s.invnr || '', telefon: leidjaTelefon(this.env, seaded), token });
+    // Seade on välisel hooldusel (avatud töökäsk): leidja lehel on lisaks „Hooldaja? Sisesta PIN“ (Margo 10.11.2026, variant C)
+    const too = s.too ? await this.s.get(`too:${s.too}`) : null;
+    const hooldus = !!(too && this.tooAvatud(too));
+    return json({ ok: true, firma: seaded.firma, nimi: s.nimi, invnr: s.invnr || '', telefon: leidjaTelefon(this.env, seaded), token, ...(hooldus ? { hooldus: true, hooldus_sees: (await this.hSess(request))?.id === too.id } : {}) });
   }
   // Ühine kontroll: kehtiv token → seade. Tagastab {kk, s} või veavastuse.
   async leidToken(token) {
@@ -955,6 +968,14 @@ export class Register {
       if (tee === 'logi.csv') return this.logiCsv();
       if (tee === 'partiid') return json({ ok: true, partiid: await this.partiid() });
       if (tee === 'taatlused') { const kk = normKood(url.searchParams.get('kood') || ''); return json({ ok: true, taatlused: kk ? (await this.loend(`taatlus:${kk}:`, 50)).map(([, x]) => x) : [] }); }
+      if (tee === 'too') { const t = await this.s.get(`too:${String(url.searchParams.get('id') || '').replace(/[^0-9A-Z]/g, '')}`); return t ? json({ ok: true, too: this.tooHaldurile(t) }) : viga('ei leitud', 404); }
+      if (tee === 'too-fail') {
+        const v = url.searchParams.get('k') || '';
+        if (!HFAIL_RE.test(v) || !this.env.FOTOD) return viga('ei leitud', 404);
+        const o = await this.env.FOTOD.get(v);
+        if (!o) return viga('ei leitud', 404);
+        return new Response(o.body, { headers: { 'Content-Type': DOK_MIME[v.split('.').pop()], 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox", 'Content-Disposition': 'inline' } });
+      }
       if (tee === 'hooldused') { const kk = normKood(url.searchParams.get('kood') || ''); return json({ ok: true, hooldused: kk ? (await this.loend(`hooldus:${kk}:`, 50)).map(([, x]) => x) : [] }); }
       if (tee === 'dokument') {
         const v = url.searchParams.get('k') || '';
@@ -999,6 +1020,11 @@ export class Register {
       case 'kalender': return this.adminKalender(b);
       case 'ai-litsents': return this.aiLitsents();
       case 'hooldus-tehtud': return this.hooldusTehtud(b);
+      case 'hooldaja': return this.adminHooldaja(b);
+      case 'hooldusse': return this.adminHooldusse(b);
+      case 'too-uus-pin': return this.adminTooPin(b);
+      case 'too-sulge': return this.adminTooSulge(b);
+      case 'too-tuhista': return this.adminTooTuhista(b);
     }
     return viga('tundmatu', 404);
   }
@@ -1031,7 +1057,9 @@ export class Register {
     for (const [, b] of await this.loend('bron:')) if (b.lopp >= t) broneeringud.push({ ...b, nimi: kasutajad.get(b.kasutaja)?.nimi || '?', tel: kasutajad.get(b.kasutaja)?.tel || '', seade: seadmed.find((x) => x.kood === b.kood)?.nimi || '?' });
     broneeringud.sort((a, b) => (a.algus < b.algus ? -1 : 1));
     const viimane = (await this.loend('logi:', 1)).map(([, x]) => x.aeg)[0] || 0;
-    return { ok: true, seaded, foto_olemas: !!this.env.FOTOD, ai_olemas: !!this.env.AI, ai_paevas: AI_PAEVAS, kohad, seadmed, kasutajad: kas, kinnitused, vaidlused, margmed, broneeringud, logi_viimane: viimane };
+    const hooldajad = (await this.loend('hooldaja:')).map(([, x]) => x);
+    const tood = (await this.loend('too:')).map(([, x]) => this.tooHaldurile(x)).filter((t) => t.olek === 'avatud' || t.olek === 'tehtud' || Date.now() - (t.suletud || t.loodud) < 90 * 86400000);
+    return { ok: true, seaded, foto_olemas: !!this.env.FOTOD, ai_olemas: !!this.env.AI, ai_paevas: AI_PAEVAS, hooldajad, tood, kohad, seadmed, kasutajad: kas, kinnitused, vaidlused, margmed, broneeringud, logi_viimane: viimane };
   }
 
   async adminSeade(b) {
@@ -1059,6 +1087,7 @@ export class Register {
     for (const [v, max] of [['tootja', 60], ['mudel', 60], ['ost_muuja', 80]]) if (b[v] !== undefined) lisa[v] = puhasta(b[v], max);
     for (const v of ['ost_kuupaev', 'garantii_kuni']) if (b[v] !== undefined) { if (b[v] === '' || b[v] === null) lisa[v] = null; else { lisa[v] = kuupaev(b[v]); if (!lisa[v]) return viga('Vigane kuupäev (AAAA-KK-PP).'); } }
     if (b.ost_hind !== undefined) { if (b.ost_hind === '' || b.ost_hind === null) lisa.ost_hind = null; else { lisa.ost_hind = hindArvuks(String(b.ost_hind)); if (lisa.ost_hind === null) return viga('Vigane hind.'); } }
+    if (b.hooldaja !== undefined) { const hid = String(b.hooldaja || '').replace(/[^0-9A-Z]/g, ''); if (hid && !(await this.s.get(`hooldaja:${hid}`))) return viga('Hooldajat ei leitud.'); lisa.hooldaja = hid || null; }
     if (b.hooldused !== undefined) { const h = hooldusPlaanid(b.hooldused, s?.hooldused || [], tana(Date.now())); if (typeof h === 'string') return viga(h); lisa.hooldused = h; }
     let dok = (s?.dokumendid || []).slice();
     if (Array.isArray(b.dokumendid_eemalda)) for (const v of b.dokumendid_eemalda) { const d = dok.find((x) => x.voti === v && !x.kustutatud); if (d) d.kustutatud = Date.now(); }
@@ -1310,6 +1339,212 @@ export class Register {
     await this.s.put(`hooldus:${kk}:${String(1e15 - Date.now()).padStart(16, '0')}:${juhuslik(4)}`, kirje);
     await this.logi({ tyyp: 'hooldus', kood: kk, nimi: 'haldur', seade: s.nimi, tekst: `${h.nimi} ${d}${kirje.markus ? ': ' + kirje.markus : ''}` });
     return json({ ok: true, hooldus: kirje, seade: s });
+  }
+
+  // ---------- välise hoolduse töökäsk (Margo 10.11.2026) ----------
+  tooAvatud(t, nyyd = Date.now()) { return (t.olek === 'avatud' || t.olek === 'tehtud') && t.kehtib_kuni > nyyd; }
+  tooHaldurile(t) { const { token_rasi, nonce, ...x } = t; return x; }
+  async adminHooldaja(b) {
+    const v = hooldajaValjad(b); if (typeof v === 'string') return viga(v);
+    const id = b.id ? String(b.id).replace(/[^0-9A-Z]/g, '') : null;
+    const vana = id ? await this.s.get(`hooldaja:${id}`) : null;
+    if (id && !vana) return viga('Hooldajat ei leitud', 404);
+    const kirje = { ...(vana || { id: juhuslik(10), loodud: Date.now() }), ...v, aktiivne: b.aktiivne === undefined ? (vana ? vana.aktiivne !== false : true) : !!b.aktiivne, muudetud: Date.now() };
+    await this.s.put(`hooldaja:${kirje.id}`, kirje);
+    await this.logi({ tyyp: vana ? 'hooldaja_muudetud' : 'hooldaja_lisatud', nimi: 'haldur', tekst: kirje.nimi });
+    return json({ ok: true, hooldaja: kirje });
+  }
+  // Uus link ja sool: vana link ja PIN lakkavad kehtimast, avatud sessioonid samuti (sessioon on seotud soolaga).
+  async tooVotmed(t) {
+    if (t.token_rasi) await this.s.delete(`htoken:${t.token_rasi}`);
+    const link = juhuslik(32);
+    t.nonce = juhuslik(16); t.token_rasi = await sha256hex(link); t.pin_vead = 0;
+    await this.s.put(`htoken:${t.token_rasi}`, t.id);
+    return { link, pin: await looPin(this.env.TOKEN_SECRET, { id: t.id, kuupaev: t.kuupaev, invnr: t.invnr, hooldaja: t.hooldaja, nonce: t.nonce }) };
+  }
+  async adminHooldusse({ kood, hooldaja, rike, paevi }) {
+    const kk = normKood(kood || '');
+    const s = kk ? await this.elus(`seade:${kk}`) : null;
+    if (!s) return viga('Seadet ei leitud', 404);
+    if (await this.s.get(`laen:${kk}`)) return viga('Seade on kellegi nimel. Registreeri enne tagastus.', 409);
+    if (s.too) { const vana = await this.s.get(`too:${s.too}`); if (vana && this.tooAvatud(vana)) return viga('Seadmel on juba avatud töökäsk.', 409); }
+    const h = await this.s.get(`hooldaja:${String(hooldaja || '').replace(/[^0-9A-Z]/g, '')}`);
+    if (!h || h.aktiivne === false) return viga('Vali hooldaja.');
+    const p = paevi === undefined || paevi === '' ? TOO_PAEVI : Number(paevi);
+    if (!Number.isInteger(p) || p < 1 || p > TOO_PAEVI_MAX) return viga(`Kehtivus 1–${TOO_PAEVI_MAX} päeva.`);
+    const nyyd = Date.now();
+    const t = { id: juhuslik(10), kood: kk, invnr: s.invnr || kk, seade_nimi: s.nimi, hooldaja: h.id, hooldaja_nimi: h.nimi, rike: puhastaMitmerealine(rike, 1000),
+      kuupaev: tana(nyyd), loodud: nyyd, kehtib_kuni: nyyd + p * 86400000, olek: 'avatud', ettepanek: null, kirjed: [], failid: [], eelmine_olek: s.olek };
+    const v = await this.tooVotmed(t);
+    await this.s.put(`too:${t.id}`, t);
+    s.olek = 'remondis'; s.too = t.id; s.hooldaja = h.id; s.muudetud = nyyd;
+    await this.s.put(`seade:${kk}`, s);
+    await this.logi({ tyyp: 'hooldusse', kood: kk, nimi: 'haldur', seade: s.nimi, tekst: `${h.nimi}, kuni ${tana(t.kehtib_kuni)}` });
+    return json({ ok: true, too: this.tooHaldurile(t), link: v.link, pin: v.pin, pin_vorm: pinVorm(v.pin) });
+  }
+  async adminTooPin({ id }) {
+    const t = await this.s.get(`too:${String(id || '').replace(/[^0-9A-Z]/g, '')}`);
+    if (!t || !this.tooAvatud(t)) return viga('Avatud töökäsku ei leitud', 404);
+    const v = await this.tooVotmed(t);
+    await this.s.put(`too:${t.id}`, t);
+    await this.logi({ tyyp: 'too_uus_pin', kood: t.kood, nimi: 'haldur', seade: t.seade_nimi });
+    return json({ ok: true, too: this.tooHaldurile(t), link: v.link, pin: v.pin, pin_vorm: pinVorm(v.pin) });
+  }
+  async tooLopeta(t, olek) {
+    if (t.token_rasi) await this.s.delete(`htoken:${t.token_rasi}`);
+    t.token_rasi = null; t.nonce = juhuslik(16); t.olek = olek; t.suletud = Date.now();
+    await this.s.put(`too:${t.id}`, t);
+    const s = await this.s.get(`seade:${t.kood}`);
+    if (s && s.too === t.id) { s.too = null; await this.s.put(`seade:${t.kood}`, s); }
+    return s;
+  }
+  // Kinnita ja sulge: hooldaja sissekanded lähevad seadme hooldusajalukku, valitud hooldusplaan märgitakse tehtuks, seadme olek valitakse.
+  async adminTooSulge({ id, olek, plaan, markus }) {
+    const t = await this.s.get(`too:${String(id || '').replace(/[^0-9A-Z]/g, '')}`);
+    if (!t || (t.olek !== 'avatud' && t.olek !== 'tehtud')) return viga('Avatud töökäsku ei leitud', 404);
+    const uusOlek = ['aktiivne', 'remondis', 'maha'].includes(olek) ? olek : 'aktiivne';
+    const kirjed = t.kirjed.filter((k) => !k.kustutatud);
+    const kulu = kirjed.reduce((a, k) => a + (k.kulu || 0), 0);
+    const s = await this.tooLopeta(t, 'suletud');
+    if (s) {
+      s.olek = uusOlek; s.muudetud = Date.now();
+      const nyyd = Date.now(), d = tana(nyyd);
+      const h = plaan ? (s.hooldused || []).find((x) => x.id === plaan) : null;
+      if (h) { h.viimati = d; h.jargmine = kuudLisa(d, h.intervall); h.tegija = t.hooldaja_nimi; }
+      await this.s.put(`seade:${t.kood}`, s);
+      const tekst = [puhasta(markus, 300), ...kirjed.map((k) => k.tekst.replace(/\s+/g, ' ').slice(0, 200))].filter(Boolean).join(' · ').slice(0, 1000);
+      await this.s.put(`hooldus:${t.kood}:${String(1e15 - nyyd).padStart(16, '0')}:${juhuslik(4)}`,
+        { kood: t.kood, plaan: h ? h.id : null, nimi: h ? h.nimi : 'Väline hooldus', kuupaev: d, jargmine: h ? h.jargmine : null, tegija: t.hooldaja_nimi, markus: tekst, kulu: kulu ? Math.round(kulu * 100) / 100 : null, too: t.id, aeg: nyyd });
+    }
+    await this.logi({ tyyp: 'too_suletud', kood: t.kood, nimi: 'haldur', seade: t.seade_nimi, tekst: `${t.hooldaja_nimi}, olek ${uusOlek}` });
+    return json({ ok: true, too: this.tooHaldurile(t) });
+  }
+  async adminTooTuhista({ id }) {
+    const t = await this.s.get(`too:${String(id || '').replace(/[^0-9A-Z]/g, '')}`);
+    if (!t || (t.olek !== 'avatud' && t.olek !== 'tehtud')) return viga('Avatud töökäsku ei leitud', 404);
+    const s = await this.tooLopeta(t, 'tuhistatud');
+    if (s && t.eelmine_olek && s.olek === 'remondis') { s.olek = t.eelmine_olek; await this.s.put(`seade:${t.kood}`, s); }
+    await this.logi({ tyyp: 'too_tuhistatud', kood: t.kood, nimi: 'haldur', seade: t.seade_nimi });
+    return json({ ok: true, too: this.tooHaldurile(t) });
+  }
+  // Hooldaja sisenemine: seadme kood + PIN (C) või töökäsu link (A). Mõlemad annavad sama, ühe töökäsuga seotud sessiooni.
+  async hSessioon(t) {
+    const token = juhuslik(40), aegub = Math.min(Date.now() + HSESS_MS, t.kehtib_kuni);
+    await this.s.put(`hsess:${await sha256hex(token)}`, { too: t.id, nonce: t.nonce, aegub });
+    for (const [v, x] of await this.loend('hsess:')) if (x.aegub < Date.now()) await this.s.delete(v);
+    return `qw_hool=${token}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${Math.max(60, Math.floor((aegub - Date.now()) / 1000))}`;
+  }
+  async hSess(request) {
+    const token = kypsis(request, 'qw_hool');
+    if (!token || !/^[0-9A-Z]{40}$/.test(token)) return null;
+    const sv = `hsess:${await sha256hex(token)}`, x = await this.s.get(sv);
+    if (!x || x.aegub < Date.now()) return null;
+    const t = await this.s.get(`too:${x.too}`);
+    if (!t || !this.tooAvatud(t) || t.nonce !== x.nonce) return null; // suletud, tühistatud või uus PIN → sessioon kehtetu
+    t._sess = sv;
+    return t;
+  }
+  async hPin({ kood, pin }, ip) {
+    if (this.piiratud(`hpin:${ip}`, 5)) return viga('Liiga palju katseid. Proovi 15 minuti pärast.', 429);
+    const kk = normKood(kood || '');
+    const s = kk ? await this.elus(`seade:${kk}`) : null;
+    const t = s && s.too ? await this.s.get(`too:${s.too}`) : null;
+    if (!t || !this.tooAvatud(t)) { this.viga(`hpin:${ip}`); return viga('Seadmel ei ole avatud hoolduse töökäsku.', 404); }
+    if ((t.pin_vead || 0) >= PIN_VEAD_MAX) return viga('PIN on lukus (liiga palju vigaseid katseid). Küsi seadme omanikult uus PIN.', 423);
+    const oige = await looPin(this.env.TOKEN_SECRET, { id: t.id, kuupaev: t.kuupaev, invnr: t.invnr, hooldaja: t.hooldaja, nonce: t.nonce });
+    if (!vordle(pinNorm(pin), oige)) {
+      this.viga(`hpin:${ip}`); t.pin_vead = (t.pin_vead || 0) + 1; await this.s.put(`too:${t.id}`, t);
+      if (t.pin_vead >= PIN_VEAD_MAX) this.teavitaTaustal(`⚠️ Hoolduse PIN lukus: ${t.seade_nimi} (${t.invnr}), ${PIN_VEAD_MAX} vigast katset. Loo halduses uus PIN.`);
+      return viga('Vale PIN.', 401);
+    }
+    t.pin_vead = 0; await this.s.put(`too:${t.id}`, t);
+    await this.logi({ tyyp: 'hooldaja_sisenes', kood: t.kood, nimi: t.hooldaja_nimi, seade: t.seade_nimi, tekst: 'PIN' });
+    return json({ ok: true }, 200, { 'Set-Cookie': await this.hSessioon(t) });
+  }
+  async hLink({ token }, ip) {
+    if (this.piiratud(`hlink:${ip}`, 10)) return viga('Liiga palju katseid. Proovi 15 minuti pärast.', 429);
+    if (typeof token !== 'string' || !/^[0-9A-Z]{32}$/.test(token)) { this.viga(`hlink:${ip}`); return viga('Vigane link.', 404); }
+    const id = await this.s.get(`htoken:${await sha256hex(token)}`);
+    const t = id ? await this.s.get(`too:${id}`) : null;
+    if (!t || !this.tooAvatud(t)) { this.viga(`hlink:${ip}`); return viga('Link ei kehti (töökäsk on suletud või aegunud).', 404); }
+    await this.logi({ tyyp: 'hooldaja_sisenes', kood: t.kood, nimi: t.hooldaja_nimi, seade: t.seade_nimi, tekst: 'link' });
+    return json({ ok: true }, 200, { 'Set-Cookie': await this.hSessioon(t) });
+  }
+  // Hooldaja vaade: ainult töökäsu ja seadme tehnilised andmed, mitte kasutajad, hinnad ega ajalugu
+  async hooldajaVaade(t) {
+    const s = await this.s.get(`seade:${t.kood}`) || {};
+    const seaded = await this.seaded();
+    return { ok: true, firma: seaded.firma, too: { id: t.id, kuupaev: t.kuupaev, kehtib_kuni: tana(t.kehtib_kuni), olek: t.olek, ettepanek: t.ettepanek, ettepanek_tekst: t.ettepanek_tekst || '', rike: t.rike, hooldaja: t.hooldaja_nimi,
+      seade: { nimi: s.nimi || t.seade_nimi, tootja: s.tootja || '', mudel: s.mudel || '', seerianr: s.seerianr || '', invnr: t.invnr, tyyp: s.tyyp || '' },
+      kirjed: t.kirjed.filter((k) => !k.kustutatud).map(({ ajalugu, ...k }) => ({ ...k, muudetud_kordi: (ajalugu || []).length })),
+      failid: t.failid.filter((f) => !f.kustutatud) }, liigid: { kirjed: HKIRJE_LIIGID, failid: HFAIL_LIIGID, ettepanekud: ETTEPANEKUD } };
+  }
+  async hooldajaParing(request, tee, b) {
+    const t = await this.hSess(request);
+    if (!t) return viga('Hoolduse sessioon puudub või töökäsk on suletud. Skänni seade ja sisesta PIN uuesti.', 401);
+    const sv = t._sess; delete t._sess;
+    const nyyd = Date.now();
+    if (tee === 'valja') { await this.s.delete(sv); return json({ ok: true }, 200, { 'Set-Cookie': 'qw_hool=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0' }); }
+    if (tee === 'too') return json(await this.hooldajaVaade(t));
+    if (tee === 'kirje') {
+      const v = kirjeValjad(b, hindArvuks); if (typeof v === 'string') return viga(v);
+      let k = b.id ? t.kirjed.find((x) => x.id === b.id && !x.kustutatud) : null;
+      if (b.id && !k) return viga('Sissekannet ei leitud', 404);
+      if (k) { k.ajalugu = [...(k.ajalugu || []), { liik: k.liik, tekst: k.tekst, kulu: k.kulu, aeg: k.muudetud || k.loodud }].slice(-20); Object.assign(k, v, { muudetud: nyyd }); }
+      else { if (t.kirjed.length >= HKIRJE_ARV) return viga('Sissekandeid on liiga palju.'); k = { id: juhuslik(8), ...v, loodud: nyyd, muudetud: null, ajalugu: [] }; t.kirjed.push(k); }
+      await this.s.put(`too:${t.id}`, t);
+      if (t.kirjed.filter((x) => !x.kustutatud).length === 1 && !b.id) this.teavitaTaustal(`🔧 Hooldaja ${t.hooldaja_nimi} lisas esimese sissekande: ${t.seade_nimi} (${t.invnr})`);
+      return json(await this.hooldajaVaade(t));
+    }
+    if (tee === 'kirje-eemalda') {
+      const k = t.kirjed.find((x) => x.id === b.id && !x.kustutatud); if (!k) return viga('Sissekannet ei leitud', 404);
+      k.kustutatud = nyyd; await this.s.put(`too:${t.id}`, t); // jääb haldurile näha (läbikriipsutatud)
+      return json(await this.hooldajaVaade(t));
+    }
+    if (tee === 'fail-eemalda') {
+      const f = t.failid.find((x) => x.voti === b.voti && !x.kustutatud); if (!f) return viga('Faili ei leitud', 404);
+      f.kustutatud = nyyd; await this.s.put(`too:${t.id}`, t);
+      return json(await this.hooldajaVaade(t));
+    }
+    if (tee === 'valmis') {
+      const e = typeof b.ettepanek === 'string' && Object.hasOwn(ETTEPANEKUD, b.ettepanek) ? b.ettepanek : null;
+      if (!e) return viga('Vali tulemus.');
+      t.ettepanek = e; t.ettepanek_tekst = puhastaMitmerealine(b.tekst, 500); t.olek = 'tehtud'; t.tehtud = nyyd;
+      await this.s.put(`too:${t.id}`, t);
+      await this.logi({ tyyp: 'hooldus_tehtud', kood: t.kood, nimi: t.hooldaja_nimi, seade: t.seade_nimi, tekst: ETTEPANEKUD[e] });
+      this.teavitaTaustal(`✅ Hooldaja ${t.hooldaja_nimi}: ${t.seade_nimi} (${t.invnr}) – ${ETTEPANEKUD[e]}${t.ettepanek_tekst ? '\n' + t.ettepanek_tekst : ''}\nKinnita halduses.`);
+      return json(await this.hooldajaVaade(t));
+    }
+    return viga('tundmatu', 404);
+  }
+  async hFailUles(request, url) {
+    const t = await this.hSess(request);
+    if (!t) return viga('Hoolduse sessioon puudub.', 401);
+    delete t._sess;
+    if (!this.env.FOTOD) return viga('Failide hoidla ei ole seadistatud.', 501);
+    if (t.failid.filter((f) => !f.kustutatud).length >= HFAIL_ARV) return viga(`Kuni ${HFAIL_ARV} faili töökäsu kohta.`);
+    if (this.piiratud(`hfail:${t.id}`, 60, 3600 * 1000)) return viga('Liiga palju faile, proovi hiljem.', 429);
+    if (Number(request.headers.get('Content-Length') || 0) > HFAIL_MAX) return viga('Fail on liiga suur (kuni 10 MB).', 413);
+    const b = await loeKeha(request, HFAIL_MAX);
+    if (!b || b.length < 100) return viga('Fail on liiga suur või tühi.', 413);
+    const tp = dokTyyp(b); if (!tp) return viga('Lubatud on foto (JPEG, PNG, WebP) või PDF.', 415);
+    this.viga(`hfail:${t.id}`);
+    const lk = url.searchParams.get('liik'), liik = lk && Object.hasOwn(HFAIL_LIIGID, lk) ? lk : 'muu';
+    const nyyd = Date.now();
+    const voti = `h/${tana(nyyd).slice(0, 7).replace('-', '')}/${String(nyyd).padStart(13, '0')}-${juhuslik(6)}.${tp}`;
+    await this.env.FOTOD.put(voti, b, { httpMetadata: { contentType: DOK_MIME[tp] } });
+    t.failid.push({ voti, liik, nimi: puhasta(url.searchParams.get('nimi') || '', 80), mime: DOK_MIME[tp], suurus: b.length, aeg: nyyd });
+    await this.s.put(`too:${t.id}`, t);
+    return json(await this.hooldajaVaade(t));
+  }
+  async hFailVaata(request, url) {
+    const t = await this.hSess(request);
+    if (!t) return viga('Hoolduse sessioon puudub.', 401);
+    const v = url.searchParams.get('k') || '';
+    if (!HFAIL_RE.test(v) || !t.failid.some((f) => f.voti === v && !f.kustutatud) || !this.env.FOTOD) return viga('ei leitud', 404);
+    const o = await this.env.FOTOD.get(v);
+    if (!o) return viga('ei leitud', 404);
+    return new Response(o.body, { headers: { 'Content-Type': DOK_MIME[v.split('.').pop()], 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox", 'Content-Disposition': 'inline' } });
   }
 
   // ---------- dokumendid ja pildilt lugemine (Margo 10.11.2026) ----------

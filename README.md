@@ -91,6 +91,14 @@ Sama mis **K | KODU** (margo875/qrkodu, kujundus B „Kodu arhiiv“, Margo 03.1
 - **Kleebised valikutega:** haldus → Seadmed (vali) → 🖨 Kleebised või Eeltrükitud koodid → „Kleebised valikutega“. Suurus 100/90/80/70/60 % (QR 19,5 → 11,7 mm), sama koodiga QR-e 0–6, leidja kleebis Kindaveli raamis: „TEATA LEIUST“ neljal küljel / oma tekst üleval ja all (kuni 20 märki, suurtähed) / ilma. Prindi või SVG trükikojale. Valik jääb brauserisse meelde.
 - Varundus: ootel (Margo otsustab).
 
+## Väline hooldus: töökäsk, link ja PIN (0.8.0, Margo 10.11.2026)
+- **Hooldajad** (Haldus → Hooldus): ettevõte, registrikood, KMKR, aadress, kontaktisik, telefon, e-post, arve e-post, märkus. Seadmele saab valida vaikimisi hooldaja.
+- **Saada hooldusesse** (seadme juures): hooldaja, tellimus/rikke kirjeldus, kehtivus (vaikimisi 30 päeva, kuni 180). Seade läheb olekusse „remondis“ (võtta ei saa). Kellegi nimel olevat seadet ei saa saata.
+- **Töökäsk (A)**: prinditav A4-tellimus (tellija, seade, tootja/mudel/seerianr, hooldaja kontakt ja arve andmed, kirjeldus) koos hoolduse QR-iga `/H/<link>`. Hooldaja skännib QR-i ja jõuab seadme hoolduse vaatesse.
+- **PIN (C)**: 8 numbrit, arvutatakse HMAC-iga (TOKEN_SECRET; töökäsu id, hooldusesse märkimise kuupäev, inventarinumber, hooldaja id, töökäsu sool), PIN-i ennast ei salvestata. Võõras skännib seadme kleebist → leidja leht + „Hooldaja? Sisesta PIN“. Piirid: 5 viga 15 min IP kohta, 10 viga töökäsu kohta → lukus (haldurile teade, „Uus PIN ja link“). Link ja PIN näidatakse ainult loomisel (prinditakse töökäsule).
+- **Hooldaja vaade**: ainult seadme tehnilised andmed ja tellimus (mitte kasutajad, hinnad, ostuandmed, ajalugu). Sissekanded (vastuvõtt, tehtud töö, osad, akt, kooskõlastus, muu; summa km-ta) ja failid (foto, akt, arve, tunnistus; ≤ 10 MB, kuni 40) – lisab, muudab ja eemaldab kuni haldur töökäsu sulgeb; „Märgi tehtuks“ (valmis / ei ole parandatav / vajab kooskõlastust). Muudetud kande vanad versioonid ja eemaldatud kanded/failid jäävad haldurile näha (tõend). Sessioon (küpsis, 12 h) on seotud ühe töökäsuga.
+- **Haldur**: töökäsu ülevaade, „Kinnita ja sulge“ (sissekanded ja summa hooldusajalukku, valitud hooldusplaan tehtuks, seadme olek), „Tühista“, „Uus PIN ja link“ (vanad lakkavad kohe, ka avatud sessioonid). Teavitused: esimene sissekanne, tehtud, PIN lukus.
+
 ## Haldus `/admin` (ADMIN_TOKEN)
 - **Ülevaade:** vaidlused, kinnitust ootavad kasutajad, kinnitamata ülevõtud (keelu eemaldamine), märkused (lahendamine), taatlus aegub/aegunud, kasutuses seadmed (päevade arv, üle `hoiata_paevi` punasena, „Tagasta (haldur)“).
 - **Seadmed:** lisa/muuda (nimi, tüüp, inventari- ja seerianumber, taatlus kuni, olek, koduladu, lisainfo, valikuliselt olemasolev 12-märgine kood), ajalugu, **sildid printimiseks** (32 × 44 mm, QR 28 mm + nimi + inventarinr + kood), CSV.

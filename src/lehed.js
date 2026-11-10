@@ -142,7 +142,7 @@ body.menyyga main{padding-bottom:calc(96px + env(safe-area-inset-bottom))}body.m
 .lahter{position:relative}.lahter textarea{display:block;padding-bottom:26px}.lahter input{display:block;padding-right:64px}
 .lk{position:absolute;right:12px;bottom:18px;font-size:12px;line-height:1;color:var(--nork);pointer-events:none}.lk.pk{color:var(--puna)}.lahter.in .lk{bottom:auto;top:50%;transform:translateY(-50%)}
 .tapp{display:inline-block;min-width:1.3em;padding:0 .35em;border-radius:1em;background:var(--aktsent);color:#fff;font-size:12px;line-height:1.3em;text-align:center;font-weight:700}
-.keskel{text-align:center}input[type=search]::-webkit-search-cancel-button{filter:grayscale(1)}
+.keskel{text-align:center}[hidden]{display:none!important}input[type=search]::-webkit-search-cancel-button{filter:grayscale(1)}
 @media (max-width:700px){table{display:block;overflow-x:auto}}`;
 
 // Päis „K | Krativara“ (Margo 10.11.2026; sama nimi on PWA-l), paremal töökoht või firma
@@ -177,7 +177,7 @@ jalus();
 </script>`;
 }
 
-export function appLeht(nonce, { seade = '', koht = '', info = '', ver } = {}) {
+export function appLeht(nonce, { seade = '', koht = '', info = '', hooldus = '', ver } = {}) {
   return `<!doctype html><html lang="et"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex"><title>K | Krativara</title><meta name="apple-mobile-web-app-title" content="K | VARA"><meta name="application-name" content="K | Krativara"><link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#FAF9F6" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#1C1916" media="(prefers-color-scheme: dark)"><link rel="preload" href="/fondid/instrument-sans-latin.woff2" as="font" type="font/woff2" crossorigin><link rel="apple-touch-icon" href="/apple-touch-icon.png"><style>${STIIL}</style></head>
 <body>${RIBA}<main id="sisu"><p class="vaike">Laen…</p></main><nav class="menyy" id="menyy" aria-label="Põhimenüü" hidden></nav>
@@ -186,7 +186,7 @@ ${ABI}
 ${koodTekstist.toString()}
 ${kasitsiKood.toString()}
 ${EXIF_JS}
-const URL_SEADE=${JSON.stringify(seade)}, URL_KOHT=${JSON.stringify(koht)}, URL_INFO=${JSON.stringify(info)};
+const URL_SEADE=${JSON.stringify(seade)}, URL_KOHT=${JSON.stringify(koht)}, URL_INFO=${JSON.stringify(info)}, URL_HOOLDUS=${JSON.stringify(hooldus)};
 let S={firma:'',koht:null,mina:null};
 const LS={get(k){try{return localStorage.getItem(k)||''}catch(e){return ''}},set(k,v){try{localStorage.setItem(k,v)}catch(e){}}};
 async function api(tee,keha){
@@ -205,6 +205,9 @@ const pea=()=>'<h1>'+esc(S.firma||'Krativara')+'</h1>';
 
 // ---------- algus ----------
 (async function(){
+  if(URL_HOOLDUS){history.replaceState(null,'','/');const r=await api('/api/hooldus/link',{token:URL_HOOLDUS});
+    if(!r.ok){sisu('<h1>Hoolduse töökäsk</h1><div class="viga">'+ik('keeld')+'<span>'+esc(r.viga||'Link ei kehti.')+'</span></div><p class="vaike">Küsi seadme omanikult uus link või skänni seadme kleebist ja sisesta PIN.</p>');return;}
+    return hooldajaVaade();}
   if(URL_KOHT) LS.set('qw_koht',URL_KOHT);
   const j=await api('/api/alusta',{koht:URL_KOHT||LS.get('qw_koht')});
   S.firma=j.firma||'';S.koht=j.koht||null;S.mina=j.mina||null;
@@ -462,6 +465,53 @@ async function laod(){
   document.querySelectorAll('li[data-kood]').forEach(li=>li.onclick=()=>seadmeVaade(li.dataset.kood,false));
 }
 
+// ---------- hooldaja (väline hooldus, Margo 10.11.2026) ----------
+// Sessioon on seotud ühe töökäsuga (küpsis qw_hool). Hooldaja saab sissekandeid ja faile lisada, muuta ja eemaldada kuni haldur töökäsu sulgeb.
+let HV=null;
+async function hooldajaVaade(teade){
+  const j=await api('/api/hooldus/too',{});
+  if(!j.ok){sisu('<h1>Hoolduse töökäsk</h1><div class="viga">'+ik('keeld')+'<span>'+esc(j.viga||'Viga')+'</span></div>');return;}
+  HV=j; S.firma=j.firma; const t=j.too, L=j.liigid, sd=t.seade;
+  const rida=(k,v)=>v?'<div><dt>'+k+'</dt><dd>'+v+'</dd></div>':'';
+  sisu('<h1>'+esc(sd.nimi)+'</h1><p class="alapealkiri">Hoolduse töökäsk · '+esc(t.hooldaja)+' · kehtib kuni '+esc(t.kehtib_kuni)+'</p>'+(teade||'')+
+   (t.olek==='tehtud'?'<div class="olekuplokk minu"><strong>'+ik('ok')+'Märgitud tehtuks</strong><span>'+esc(L.ettepanekud[t.ettepanek]||'')+(t.ettepanek_tekst?' · '+esc(t.ettepanek_tekst):'')+'. Saad veel parandada, kuni omanik kinnitab.</span></div>'
+     :'<div class="olekuplokk teise"><strong>'+ik('mootja')+'Hoolduses</strong><span>Alates '+esc(t.kuupaev)+'</span></div>')+
+   '<div class="kaart"><dl class="andmed">'+rida('Omanik',esc(j.firma))+rida('Inventarinr',esc(sd.invnr))+rida('Tüüp',esc(sd.tyyp))+rida('Tootja',esc(sd.tootja))+rida('Mudel',esc(sd.mudel))+rida('Seerianr',esc(sd.seerianr))+'</dl>'+
+   (t.rike?'<p style="margin:10px 0 0"><b>Rike / töö:</b><br><span style="white-space:pre-wrap">'+esc(t.rike)+'</span></p>':'')+'</div>'+
+   '<h2>Sissekanded</h2>'+(t.kirjed.length?'<ul class="loend">'+t.kirjed.map(k=>'<li><b>'+esc(L.kirjed[k.liik]||k.liik)+'</b>'+(k.kulu!=null?' · '+esc(String(k.kulu).replace('.',','))+' €':'')+'<br><span style="white-space:pre-wrap">'+esc(k.tekst)+'</span><br><span class="vaike">'+esc(aeg(k.loodud))+(k.muudetud?' · muudetud '+esc(aeg(k.muudetud)):'')+'</span>'+
+     '<div class="rida" style="margin-top:6px"><button data-km="'+esc(k.id)+'">Muuda</button><button data-ke="'+esc(k.id)+'">Eemalda</button></div></li>').join('')+'</ul>':'<div class="teave">'+ik('info')+'<span>Sissekandeid pole. Alusta vastuvõtust (seisukord, tarvikud).</span></div>')+
+   '<div class="kaart" id="k_vorm"><h2 id="k_pealk" style="margin-top:0">Lisa sissekanne</h2><input type="hidden" id="k_id"><label for="k_liik">Liik</label><select id="k_liik">'+Object.entries(L.kirjed).map(([k,v])=>'<option value="'+k+'">'+esc(v)+'</option>').join('')+'</select>'+
+   '<label for="k_tekst">Tekst</label><textarea id="k_tekst" rows="4" maxlength="2000"></textarea><label for="k_kulu">Summa € km-ta (valikuline)</label><input id="k_kulu" inputmode="decimal">'+
+   '<div class="rida"><button class="roh" id="k_salv">Salvesta</button><button id="k_loobu" hidden>Loobu</button></div><div id="k_teade"></div></div>'+
+   '<h2>Fotod ja dokumendid</h2>'+(t.failid.length?'<ul class="loend">'+t.failid.map(f=>'<li><div class="rida"><span>'+(f.mime==='application/pdf'?'PDF':'Foto')+' · <b>'+esc(L.failid[f.liik]||f.liik)+'</b>'+(f.nimi?' · '+esc(f.nimi):'')+'<br><span class="vaike">'+esc(aeg(f.aeg))+' · '+Math.round(f.suurus/1024)+' kB</span></span><a class="nupp" href="/api/hooldus/fail?k='+encodeURIComponent(f.voti)+'" target="_blank" rel="noopener">Ava</a><button data-fe="'+esc(f.voti)+'">Eemalda</button></div></li>').join('')+'</ul>':'')+
+   '<div class="kaart"><label for="f_liik">Faili liik</label><select id="f_liik">'+Object.entries(L.failid).map(([k,v])=>'<option value="'+k+'">'+esc(v)+'</option>').join('')+'</select>'+
+   '<div class="rida"><label class="nupp" style="margin:4px 0">'+ik('kaamera')+'Pildista<input type="file" id="f_kaam" accept="image/*" capture="environment" hidden></label><label class="nupp" style="margin:4px 0">Vali fail<input type="file" id="f_fail" accept="image/jpeg,image/png,image/webp,application/pdf" hidden></label></div><div id="f_teade"></div></div>'+
+   '<h2>Töö tulemus</h2><div class="kaart"><label for="v_e">Tulemus</label><select id="v_e">'+Object.entries(L.ettepanekud).map(([k,v])=>'<option value="'+k+'"'+(t.ettepanek===k?' selected':'')+'>'+esc(v)+'</option>').join('')+'</select>'+
+   '<label for="v_t">Märkus omanikule (valikuline)</label><textarea id="v_t" rows="2" maxlength="500">'+esc(t.ettepanek_tekst)+'</textarea><button class="suur roh" id="v_salv">'+ik('ok')+(t.olek==='tehtud'?'Uuenda tulemust':'Märgi tehtuks')+'</button><div id="v_teade"></div></div>'+
+   '<p class="vaike keskel"><a href="#" id="h_valja">Lõpeta (logi välja)</a></p>');
+  const v=$('#k_vorm');
+  document.querySelectorAll('[data-km]').forEach(b=>b.onclick=()=>{const k=t.kirjed.find(x=>x.id===b.dataset.km);$('#k_id').value=k.id;$('#k_liik').value=k.liik;$('#k_tekst').value=k.tekst;$('#k_kulu').value=k.kulu==null?'':String(k.kulu).replace('.',',');
+    $('#k_pealk').textContent='Muuda sissekannet';$('#k_loobu').hidden=false;v.scrollIntoView({behavior:'smooth'});});
+  $('#k_loobu').onclick=()=>hooldajaVaade();
+  document.querySelectorAll('[data-ke]').forEach(b=>b.onclick=async()=>{if(!confirm('Eemaldada sissekanne? Omanik näeb, et see eemaldati.'))return;const r=await api('/api/hooldus/kirje-eemalda',{id:b.dataset.ke});if(!r.ok){alert(r.viga);return;}hooldajaVaade();});
+  document.querySelectorAll('[data-fe]').forEach(b=>b.onclick=async()=>{if(!confirm('Eemaldada fail? Omanik näeb, et see eemaldati.'))return;const r=await api('/api/hooldus/fail-eemalda',{voti:b.dataset.fe});if(!r.ok){alert(r.viga);return;}hooldajaVaade();});
+  $('#k_salv').onclick=async()=>{const r=await api('/api/hooldus/kirje',{id:$('#k_id').value||undefined,liik:$('#k_liik').value,tekst:$('#k_tekst').value,kulu:$('#k_kulu').value.trim()});
+    if(!r.ok){$('#k_teade').innerHTML='<div class="viga">'+esc(r.viga)+'</div>';return;}hooldajaVaade('<div class="ok">'+ik('ok')+'Salvestatud.</div>');};
+  const yles=async el=>{let f=el.files&&el.files[0];el.value='';if(!f)return;const ft=$('#f_teade');
+    if(f.size>10*1024*1024&&f.type.startsWith('image/')){ft.innerHTML='<div class="vaike">Foto on suur, vähendan…</div>';try{f=await vahenda2(f);}catch(e){}}
+    if(f.size>10*1024*1024){ft.innerHTML='<div class="viga">Fail on liiga suur (kuni 10 MB).</div>';return;}
+    ft.innerHTML='<div class="vaike">Laen üles…</div>';
+    try{const r=await fetch('/api/hooldus/fail?liik='+$('#f_liik').value+'&nimi='+encodeURIComponent((f.name||'').slice(0,80)),{method:'POST',headers:{'Content-Type':f.type||'application/octet-stream','X-QW':'1'},body:f,credentials:'same-origin'});
+      const j2=await r.json();if(!j2.ok)throw new Error(j2.viga);hooldajaVaade('<div class="ok">'+ik('ok')+'Fail lisatud.</div>');}
+    catch(e){ft.innerHTML='<div class="viga">Üleslaadimine ebaõnnestus'+(e&&e.message?': '+esc(e.message):'')+'</div>';}};
+  $('#f_kaam').onchange=e=>yles(e.target);$('#f_fail').onchange=e=>yles(e.target);
+  $('#v_salv').onclick=async()=>{const r=await api('/api/hooldus/valmis',{ettepanek:$('#v_e').value,tekst:$('#v_t').value});if(!r.ok){$('#v_teade').innerHTML='<div class="viga">'+esc(r.viga)+'</div>';return;}hooldajaVaade('<div class="ok">'+ik('ok')+'Omanik sai teate.</div>');};
+  $('#h_valja').onclick=async e=>{e.preventDefault();await api('/api/hooldus/valja',{});sisu('<h1>Aitäh!</h1><p class="alapealkiri">Töökäsk on suletud selles telefonis. Uuesti sisenemiseks skänni seade ja sisesta PIN.</p>');};
+}
+async function vahenda2(fail){const url=URL.createObjectURL(fail);try{const img=await new Promise((ok,ei)=>{const i=new Image();i.onload=()=>ok(i);i.onerror=ei;i.src=url;});
+  const k=Math.min(1,3000/Math.max(img.naturalWidth,img.naturalHeight));const c=document.createElement('canvas');c.width=img.naturalWidth*k|0;c.height=img.naturalHeight*k|0;c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+  return await new Promise(ok=>c.toBlob(ok,'image/jpeg',0.88));}finally{URL.revokeObjectURL(url);}}
+
 // ---------- leidja (sisse logimata) ----------
 // Üle võetud leiamind'ist (Margo 02.11.2026): asukoht lehe avamisel (watchPosition ≤ 30 s, lõpp ≤ 20 m juures, alles jääb kõige täpsem),
 // parim lugem saadetakse automaatselt üks kord (/api/asukoht), lehelt lahkumisel sendBeaconiga. Leidjale loendurit ega ootamist ei näidata.
@@ -481,7 +531,12 @@ async function leidjaVaade(kood){
    '<div id="lfeel" hidden><img id="lfimg" alt="Foto eelvaade" style="max-width:100%;max-height:180px;border-radius:8px;margin-top:8px"><button id="lfvota" type="button">Eemalda</button></div>'+
    '<button class="suur roh" id="saada">Saada omanikule</button>'+(j.telefon?'<a class="nupp suur" id="helista" href="tel:'+esc(j.telefon)+'">'+ik('telefon')+'Helista omanikule</a>':'')+
    '<div id="olek" role="status"></div></div>'+
+   (j.hooldus?'<div class="kaart"><h2>Hooldaja?</h2>'+(j.hooldus_sees?'<button class="suur roh" id="h_ava">'+ik('mootja')+'Ava hoolduse töökäsk</button>':
+     '<p class="vaike" style="margin-top:0">Seade on hoolduses. Sisesta töökäsul olev 8-kohaline PIN.</p><label for="h_pin">PIN</label><input id="h_pin" inputmode="numeric" autocomplete="one-time-code" maxlength="9" placeholder="1234 5678" style="letter-spacing:.2em;font-size:20px"><button class="roh" id="h_sisse">Ava töökäsk</button><div id="h_teade"></div>')+'</div>':'')+
    '<div class="kaart"><p class="vaike">Oled selle firma töötaja?</p><button id="sisse">Logi sisse</button></div>');
+  if($('#h_ava'))$('#h_ava').onclick=()=>{leidLopp();hooldajaVaade();};
+  if($('#h_sisse'))$('#h_sisse').onclick=async()=>{$('#h_sisse').disabled=true;const r=await api('/api/hooldus/pin',{kood,pin:$('#h_pin').value});$('#h_sisse').disabled=false;
+    if(!r.ok){$('#h_teade').innerHTML='<div class="viga">'+ik('keeld')+'<span>'+esc(r.viga||'Vale PIN.')+'</span></div>';return;} leidLopp();hooldajaVaade();};
   const ol=$('#olek'), nupp=$('#saada'), tk=$('#tekst'), kk=$('#kontakt');
   const post=(u,b)=>fetch(u,{method:'POST',headers:{'Content-Type':'application/json','X-QW':'1'},body:JSON.stringify(Object.assign({token:T},b)),credentials:'same-origin'}).then(r=>r.json()).catch(()=>({ok:false,viga:'ühendus'}));
   const postFoto=(b,f)=>{const fd=new FormData();for(const k in b)if(b[k]!==undefined&&b[k]!==null)fd.append(k,b[k]);fd.append('foto',f,'foto.jpg');
@@ -572,13 +627,14 @@ async function lae(){U=await a('ulevaade'); if(!U.ok){$('#lviga').innerHTML='<di
   seoHash();}
 function seoHash(){const h=/^#seo=([0-9A-Z]{12})$/.exec(location.hash); if(h){history.replaceState(null,'',location.pathname);TAB='seadmed';tabs();seoKood(h[1]);}}
 window.addEventListener('hashchange',()=>{if(U&&U.ok)seoHash();});
-const TABS={ulevaade:'Ülevaade',seadmed:'Seadmed',bron:'Broneeringud',kohad:'Töökohad',kasutajad:'Kasutajad',logi:'Logi',seaded:'Seaded'};
+const TABS={ulevaade:'Ülevaade',seadmed:'Seadmed',hooldus:'Hooldus',bron:'Broneeringud',kohad:'Töökohad',kasutajad:'Kasutajad',logi:'Logi',seaded:'Seaded'};
 // Täpp vahekaardil = üle vaatamata info: lahendamata vaidlused ja märkused, kinnitust ootavad kasutajad, aegunud taatlused,
 // uued broneeringud ja logikirjed pärast vahekaardi viimast avamist (meelespea selles brauseris).
 const NAHTUD={get(k){try{return +localStorage.getItem('qw_nahtud_'+k)||0}catch(e){return 0}},set(k,v){try{localStorage.setItem('qw_nahtud_'+k,String(v))}catch(e){}}};
 function tapid(){ if(!U) return {}; const t=new Date().toLocaleDateString('sv-SE',{timeZone:'Europe/Tallinn'});
   return { ulevaade:U.vaidlused.length+U.margmed.length, kasutajad:U.kasutajad.filter(k=>k.olek==='ootel'&&!k.kustutatud).length,
     seadmed:U.seadmed.filter(s=>!s.kustutatud&&s.olek!=='maha'&&s.taatlus_kuni&&s.taatlus_kuni<t).length,
+    hooldus:(U.tood||[]).filter(t=>t.olek==='tehtud').length,
     bron:(U.broneeringud||[]).filter(b=>b.loodud>NAHTUD.get('bron')).length, logi:U.logi_viimane>NAHTUD.get('logi')?1:0 };}
 function tabs(){const tp=tapid(); $('#tabs').innerHTML=Object.entries(TABS).map(([k,t])=>'<button data-t="'+k+'" class="'+(k===TAB?'val':'')+'">'+t+(tp[k]?' <span class="tapp">'+(k==='logi'?'●':tp[k])+'</span>':'')+'</button>').join('')+'<button id="varskenda">↻</button>';
   document.querySelectorAll('[data-t]').forEach(b=>b.onclick=()=>{TAB=b.dataset.t;tabs();naita();}); $('#varskenda').onclick=lae;}
@@ -594,8 +650,65 @@ document.addEventListener('click',async e=>{const b=e.target.closest&&e.target.c
   const j=await a(kust?'kustuta':'taasta',{liik,id:b.dataset.kid}); if(!j.ok){alert(j.viga);return;} U=await a('ulevaade'); naita();});
 const kohaValik=(val,tyhi)=>'<option value="">'+(tyhi||'—')+'</option>'+U.kohad.filter(k=>!k.kustutatud).map(k=>'<option value="'+k.kood+'"'+(k.kood===val?' selected':'')+'>'+esc(k.nimi)+'</option>').join('');
 const OLEK={aktiivne:'kasutusel',remondis:'remondis/hoolduses',taatlusel:'taatlusel/kalibreerimisel',maha:'maha kantud'};
-function naita(){ peata(); const f={ulevaade,seadmed,bron,kohad,kasutajad,logi,seaded}[TAB];
+function naita(){ peata(); const f={ulevaade,seadmed,hooldus,bron,kohad,kasutajad,logi,seaded}[TAB];
   if(TAB==='bron') NAHTUD.set('bron',Date.now()); if(TAB==='logi') NAHTUD.set('logi',U.logi_viimane||Date.now()); tabs(); f(); }
+// ---------- väline hooldus: hooldajad ja töökäsud (Margo 10.11.2026) ----------
+const TOO_OLEK={avatud:'hoolduses',tehtud:'hooldaja märkis tehtuks',suletud:'suletud',tuhistatud:'tühistatud'};
+const ETTEP={valmis:'valmis, võib tagastada',ei_parandatav:'ei ole parandatav',kooskolastus:'vajab kooskõlastust (hind/osad)'};
+function hooldus(uusKood){const H=U.hooldajad||[],T=(U.tood||[]).slice().sort((a,b)=>b.loodud-a.loodud);
+  const sd=uusKood?U.seadmed.find(x=>x.kood===uusKood):null;
+  $('#sisu').innerHTML=(sd?'<h2>Saada hooldusesse: '+esc(sd.nimi)+' <span class="vaike">'+esc(sd.invnr)+'</span></h2><div class="kaart"><div class="vorm"><div><label>Hooldaja *</label><select id="hs_h"><option value="">— vali —</option>'+H.filter(h=>h.aktiivne!==false).map(h=>'<option value="'+h.id+'"'+(sd.hooldaja===h.id?' selected':'')+'>'+esc(h.nimi)+'</option>').join('')+'</select></div>'+
+     '<div><label>Töökäsk kehtib (päeva)</label><input id="hs_p" type="number" min="1" max="180" value="30"></div></div><label>Tellimus / rikke kirjeldus (hooldaja näeb)</label><textarea id="hs_r" rows="4" maxlength="1000" placeholder="nt Kalibreerimine ja tunnistus. Kukkus, ekraan ei põle."></textarea>'+
+     '<button class="roh" id="hs_salv">Loo töökäsk</button> <button id="hs_loobu">Loobu</button><div id="hs_teade"></div>'+(H.length?'':'<div class="hoiatus">Lisa enne hooldaja (allpool).</div>')+'</div>':'')+
+   '<h2>Töökäsud</h2>'+(T.length?'<table><tr><th>Seade</th><th>Hooldaja</th><th>Alates</th><th>Kehtib kuni</th><th>Olek</th><th></th></tr>'+T.map(t=>'<tr><td>'+esc(t.seade_nimi)+'<br><span class="vaike">'+esc(t.invnr)+'</span></td><td>'+esc(t.hooldaja_nimi)+'</td><td>'+esc(t.kuupaev)+'</td><td>'+esc(new Date(t.kehtib_kuni).toLocaleDateString('et-EE'))+'</td><td>'+
+     (t.olek==='tehtud'?'<b>'+esc(TOO_OLEK[t.olek])+'</b><br><span class="vaike">'+esc(ETTEP[t.ettepanek]||'')+'</span>':esc(TOO_OLEK[t.olek]))+(t.kehtib_kuni<Date.now()&&(t.olek==='avatud'||t.olek==='tehtud')?'<br><span class="vaike" style="color:var(--puna)">aegunud</span>':'')+'</td><td><button class="v" data-too="'+t.id+'">Ava</button></td></tr>').join('')+'</table>':'<p class="vaike">Töökäske pole. Seadme juures: „Saada hooldusesse“.</p>')+
+   '<div id="too_vaade"></div>'+
+   '<h2>Hooldajad</h2>'+(H.length?'<table><tr><th>Ettevõte</th><th>Kontakt</th><th>Arve</th><th></th></tr>'+H.map(h=>'<tr'+(h.aktiivne===false?' class="kustutatud" style="opacity:.55"':'')+'><td><b>'+esc(h.nimi)+'</b><br><span class="vaike">'+esc(h.regkood)+(h.kmkr?' · KMKR '+esc(h.kmkr):'')+'</span></td><td>'+esc(h.kontakt)+'<br>'+(h.tel?'<a href="tel:'+esc(h.tel)+'">'+esc(h.tel)+'</a> ':'')+esc(h.epost)+'</td><td>'+esc(h.arve_epost)+'<br><span class="vaike">'+esc(h.aadress)+'</span></td><td><button class="v" data-hm="'+h.id+'">Muuda</button></td></tr>').join('')+'</table>':'')+
+   '<div class="kaart"><h2 id="hj_pealk" style="margin-top:0">Lisa hooldaja</h2><input type="hidden" id="hj_id"><div class="vorm">'+
+   [['nimi','Ettevõtte nimi *'],['regkood','Registrikood'],['kmkr','KMKR nr'],['aadress','Aadress'],['kontakt','Kontaktisik'],['tel','Telefon'],['epost','E-post'],['arve_epost','Arve e-post']].map(([k,t])=>'<div><label>'+t+'</label><input id="hj_'+k+'"></div>').join('')+
+   '</div><label>Märkus (nt hinnakokkulepe, leping)</label><textarea id="hj_markus" rows="2"></textarea><label class="mark"><input type="checkbox" id="hj_akt" checked><span>Aktiivne (valikus)</span></label><button class="roh" id="hj_salv">Salvesta hooldaja</button><div id="hj_teade"></div></div>';
+  if($('#hs_salv')){$('#hs_loobu').onclick=()=>hooldus();
+    $('#hs_salv').onclick=async()=>{const j=await a('hooldusse',{kood:sd.kood,hooldaja:$('#hs_h').value,rike:$('#hs_r').value,paevi:$('#hs_p').value});
+      if(!j.ok){$('#hs_teade').innerHTML='<div class="viga">'+esc(j.viga)+'</div>';return;} U=await a('ulevaade');hooldus();tooVaade(j.too.id,j);};}
+  document.querySelectorAll('[data-too]').forEach(b=>b.onclick=()=>tooVaade(b.dataset.too));
+  document.querySelectorAll('[data-hm]').forEach(b=>b.onclick=()=>{const h=H.find(x=>x.id===b.dataset.hm);$('#hj_id').value=h.id;['nimi','regkood','kmkr','aadress','kontakt','tel','epost','arve_epost','markus'].forEach(k=>$('#hj_'+k).value=h[k]||'');$('#hj_akt').checked=h.aktiivne!==false;$('#hj_pealk').textContent='Muuda hooldajat';$('#hj_nimi').scrollIntoView();});
+  $('#hj_salv').onclick=async()=>{const b={id:$('#hj_id').value||undefined,aktiivne:$('#hj_akt').checked};['nimi','regkood','kmkr','aadress','kontakt','tel','epost','arve_epost','markus'].forEach(k=>b[k]=$('#hj_'+k).value);
+    const j=await a('hooldaja',b);if(!j.ok){$('#hj_teade').innerHTML='<div class="viga">'+esc(j.viga)+'</div>';return;}U=await a('ulevaade');hooldus();};}
+// Töökäsu ülevaade: hooldaja sissekanded (ka muudetud ja eemaldatud), failid; kinnita ja sulge / tühista / uus PIN ja link
+async function tooVaade(id,uus){const j=await a('too?id='+id);if(!j.ok){alert(j.viga);return;}const t=j.too,s=U.seadmed.find(x=>x.kood===t.kood)||{};const lahti=t.olek==='avatud'||t.olek==='tehtud';
+  const K={vastuvott:'vastuvõtt',too:'tehtud töö',osad:'osad / materjal',akt:'akt / tunnistus',kooskolastus:'kooskõlastus',muu:'muu'};
+  const kulu=t.kirjed.filter(k=>!k.kustutatud).reduce((x,k)=>x+(k.kulu||0),0);
+  $('#too_vaade').innerHTML='<div class="kaart" id="too_k"><h2 style="margin-top:0">Töökäsk: '+esc(t.seade_nimi)+' <span class="vaike">'+esc(t.invnr)+'</span></h2>'+
+   '<p>'+esc(t.hooldaja_nimi)+' · alates '+esc(t.kuupaev)+' · kehtib kuni '+esc(new Date(t.kehtib_kuni).toLocaleDateString('et-EE'))+' · <b>'+esc(TOO_OLEK[t.olek])+'</b>'+(t.ettepanek?' · '+esc(ETTEP[t.ettepanek]):'')+'</p>'+
+   (t.ettepanek_tekst?'<p class="vaike">Hooldaja: '+esc(t.ettepanek_tekst)+'</p>':'')+(t.rike?'<p><b>Tellimus:</b> <span style="white-space:pre-wrap">'+esc(t.rike)+'</span></p>':'')+
+   (uus?'<div class="ok">'+ik('ok')+'<span>Töökäsk loodud. PIN: <b style="font-size:20px;letter-spacing:.1em">'+esc(uus.pin_vorm)+'</b> (näidatakse ainult nüüd, see on ka prinditud töökäsul).</span></div><button class="roh" id="too_prindi">🖨 Prindi töökäsk (QR + PIN)</button>':'')+
+   '<h3>Sissekanded'+(kulu?' · kokku '+esc(kulu.toFixed(2).replace('.',','))+' €':'')+'</h3>'+(t.kirjed.length?'<table><tr><th>Aeg</th><th>Liik</th><th>Tekst</th><th>Summa</th></tr>'+t.kirjed.map(k=>'<tr'+(k.kustutatud?' style="text-decoration:line-through;opacity:.55"':'')+'><td>'+esc(aeg(k.loodud))+(k.muudetud?'<br><span class="vaike">muudetud '+esc(aeg(k.muudetud))+'</span>':'')+'</td><td>'+esc(K[k.liik]||k.liik)+'</td><td style="white-space:pre-wrap">'+esc(k.tekst)+
+     ((k.ajalugu||[]).length?'<details><summary class="vaike">Varasemad versioonid ('+k.ajalugu.length+')</summary>'+k.ajalugu.map(v=>'<div class="vaike" style="white-space:pre-wrap;border-top:1px solid var(--joon);padding:4px 0">'+esc(aeg(v.aeg))+': '+esc(v.tekst)+(v.kulu!=null?' ('+esc(String(v.kulu))+' €)':'')+'</div>').join('')+'</details>':'')+'</td><td>'+(k.kulu!=null?esc(String(k.kulu).replace('.',','))+' €':'')+'</td></tr>').join('')+'</table>':'<p class="vaike">Sissekandeid pole.</p>')+
+   '<h3>Failid</h3>'+(t.failid.length?'<ul class="loend">'+t.failid.map(f=>'<li'+(f.kustutatud?' style="text-decoration:line-through;opacity:.55"':'')+'><div class="rida"><span>'+(f.mime==='application/pdf'?'PDF':'Foto')+' · '+esc(f.liik)+(f.nimi?' · '+esc(f.nimi):'')+'<br><span class="vaike">'+esc(aeg(f.aeg))+(f.kustutatud?' · hooldaja eemaldas':'')+'</span></span><button data-tf="'+esc(f.voti)+'">Ava</button></div></li>').join('')+'</ul>':'<p class="vaike">Faile pole.</p>')+
+   (lahti?'<h3>Kinnita ja sulge</h3><div class="vorm"><div><label>Seadme olek pärast</label><select id="ts_o"><option value="aktiivne">kasutusel</option><option value="remondis">remondis/hoolduses</option><option value="maha">maha kantud</option></select></div>'+
+     '<div><label>Märgi hooldusplaan tehtuks</label><select id="ts_p"><option value="">—</option>'+(s.hooldused||[]).map(h=>'<option value="'+h.id+'">'+esc(h.nimi)+'</option>').join('')+'</select></div></div><input id="ts_m" maxlength="300" placeholder="Märkus ajalukku (valikuline)">'+
+     '<div class="rida" style="flex-wrap:wrap"><button class="roh" id="ts_sulge">Kinnita ja sulge</button><button id="ts_pin">Uus PIN ja link</button><button id="ts_tyh">Tühista töökäsk</button></div><p class="vaike">Sulgemisel lähevad sissekanded ja summa seadme hooldusajalukku, hooldaja ligipääs lõpeb.</p>':'')+'<div id="ts_teade"></div></div>';
+  $('#too_k').scrollIntoView({behavior:'smooth'});
+  document.querySelectorAll('[data-tf]').forEach(b=>b.onclick=async()=>{const r=await fetch('/api/admin/too-fail?k='+encodeURIComponent(b.dataset.tf),{headers:{'Authorization':'Bearer '+TOK}});if(!r.ok){alert('Faili ei leitud.');return;}const u=URL.createObjectURL(await r.blob());window.open(u,'_blank','noopener');setTimeout(()=>URL.revokeObjectURL(u),60000);});
+  if($('#too_prindi'))$('#too_prindi').onclick=()=>prindiTookask(t,s,uus);
+  if(!lahti)return;
+  $('#ts_sulge').onclick=async()=>{if(!confirm('Kinnitada hooldus ja sulgeda töökäsk?'))return;const r=await a('too-sulge',{id:t.id,olek:$('#ts_o').value,plaan:$('#ts_p').value||undefined,markus:$('#ts_m').value});if(!r.ok){$('#ts_teade').innerHTML='<div class="viga">'+esc(r.viga)+'</div>';return;}U=await a('ulevaade');hooldus();};
+  $('#ts_tyh').onclick=async()=>{if(!confirm('Tühistada töökäsk? Hooldaja ligipääs lõpeb.'))return;const r=await a('too-tuhista',{id:t.id});if(!r.ok){alert(r.viga);return;}U=await a('ulevaade');hooldus();};
+  $('#ts_pin').onclick=async()=>{if(!confirm('Vana PIN ja link lakkavad kohe töötamast. Jätkata?'))return;const r=await a('too-uus-pin',{id:t.id});if(!r.ok){alert(r.viga);return;}tooVaade(t.id,r);};}
+// Töökäsk A4 (tellimus): klient, seade, tellimus, hooldaja, kehtivus, hoolduse QR (link) ja PIN. Link ja PIN näidatakse ainult loomisel.
+function prindiTookask(t,s,v){const f=U.seaded.firma||'',h=(U.hooldajad||[]).find(x=>x.id===t.hooldaja)||{},link='HTTPS://'+location.host.toUpperCase()+'/H/'+v.link;
+  const r=(k,x)=>x?'<tr><td style="color:#555;padding:1.2mm 4mm 1.2mm 0;width:42mm">'+k+'</td><td style="padding:1.2mm 0"><b>'+esc(x)+'</b></td></tr>':'';
+  $('#print').innerHTML='<div style="font-family:Instrument Sans,Arial,sans-serif;font-size:3.6mm;color:#1C1C1A;max-width:180mm;margin:0 auto">'+
+   '<div style="display:flex;justify-content:space-between;align-items:baseline;border-bottom:.4mm solid #1C1C1A;padding-bottom:2mm"><div style="font:700 6mm Instrument Sans,Arial"><span style="color:#A33B20">K</span> | Krativara</div><div>'+esc(f)+'</div></div>'+
+   '<h1 style="font:500 9mm Newsreader,Georgia,serif;margin:6mm 0 2mm">Hoolduse töökäsk</h1><p style="margin:0 0 5mm;color:#555">Tellimus nr '+esc(t.id)+' · '+esc(t.kuupaev)+' · kehtib kuni '+esc(new Date(t.kehtib_kuni).toLocaleDateString('et-EE'))+'</p>'+
+   '<div style="display:flex;gap:8mm;align-items:flex-start"><table style="border-collapse:collapse;flex:1">'+r('Tellija',f)+r('Seade',s.nimi||t.seade_nimi)+r('Inventarinumber',t.invnr)+r('Tootja / mudel',[s.tootja,s.mudel].filter(Boolean).join(' '))+r('Seerianumber',s.seerianr)+
+     r('Hooldaja',h.nimi||t.hooldaja_nimi)+r('Kontakt',[h.kontakt,h.tel,h.epost].filter(Boolean).join(', '))+r('Arve',[h.arve_epost,h.regkood?'reg '+h.regkood:''].filter(Boolean).join(', '))+'</table>'+
+     '<div style="text-align:center;width:52mm">'+qrSvg(link).replace('<svg ','<svg style="width:50mm;height:50mm" ')+'<div style="font-size:3mm;color:#555">Skänni hoolduse vaate avamiseks</div></div></div>'+
+   '<h2 style="font:500 6mm Newsreader,Georgia,serif;margin:6mm 0 2mm">Tellimus / rikke kirjeldus</h2><div style="border:.3mm solid #999;border-radius:1.5mm;padding:3mm;min-height:24mm;white-space:pre-wrap">'+esc(t.rike||'')+'</div>'+
+   '<div style="display:flex;gap:6mm;margin-top:6mm;align-items:center;border:.4mm solid #1C1C1A;border-radius:1.5mm;padding:3mm 4mm"><div style="flex:1"><b>Hooldajale:</b> skänni ülal olev QR telefoni kaameraga. Kui see leht pole käepärast, skänni seadme kleebist ja sisesta PIN. '+
+     'Lisa vastuvõtul foto seisukorrast, tööde kirjeldus, aktid ja arve; vigu saad parandada kuni omanik töö kinnitab.</div><div style="text-align:center"><div style="font-size:3mm;color:#555">PIN</div><div style="font:700 8mm monospace;letter-spacing:1mm">'+esc(v.pin_vorm)+'</div></div></div>'+
+   '<p style="font-size:2.8mm;color:#555;margin-top:4mm">Ligipääs kehtib ainult sellele seadmele kuni '+esc(new Date(t.kehtib_kuni).toLocaleDateString('et-EE'))+' või töökäsu sulgemiseni. Ära jaga linki ega PIN-i kõrvalistele isikutele.</p></div>';
+  document.fonts.load('700 10px "Instrument Sans"').catch(()=>{}).then(()=>window.print());}
 function bron(){ const l=U.broneeringud||[];
   $('#sisu').innerHTML='<h2>📅 Broneeringud ('+l.length+')</h2>'+(l.length?'<table><tr><th>Seade</th><th>Kes</th><th>Periood</th><th>Märkus</th><th></th></tr>'+l.map(b=>'<tr><td>'+esc(b.seade)+'</td><td>'+esc(b.nimi)+'<br><a href="tel:'+esc(b.tel)+'">'+esc(b.tel)+'</a></td><td>'+esc(b.algus)+' – '+esc(b.lopp)+'</td><td>'+esc(b.markus||'')+'</td><td><button class="v" data-abtyh="'+esc(b.id)+'" data-kood="'+esc(b.kood)+'">Tühista</button></td></tr>').join('')+'</table>':'<p class="vaike">Kehtivaid broneeringuid pole.</p>');
   document.querySelectorAll('[data-abtyh]').forEach(x=>x.onclick=async()=>{if(!confirm('Tühistada broneering?'))return;const j=await a('bron-tyhista',{kood:x.dataset.kood,id:x.dataset.abtyh});j.ok?(U=await a('ulevaade'),naita()):alert(j.viga);});}
@@ -760,6 +873,8 @@ function seadmed(muuda,seo){
    '<h3 style="margin:18px 0 4px">Ost ja garantii <span class="vaike">(näeb ainult haldur)</span></h3><div class="vorm">'+
    '<div><label>Ostukuupäev</label><input id="s_ostkp" type="date" value="'+esc(s.ost_kuupaev||'')+'"></div><div><label>Hind km-ta (€)</label><input id="s_hind" inputmode="decimal" value="'+esc(s.ost_hind==null?'':String(s.ost_hind).replace('.',','))+'"></div>'+
    '<div><label>Müüja</label><input id="s_muuja" maxlength="80" value="'+esc(s.ost_muuja)+'"></div><div><label>Garantii kuni</label><input id="s_garantii" type="date" value="'+esc(s.garantii_kuni||'')+'"></div></div>'+
+   '<div class="vorm"><div><label>Vaikimisi hooldaja</label><select id="s_hooldaja"><option value="">—</option>'+(U.hooldajad||[]).filter(h=>h.aktiivne!==false||h.id===s.hooldaja).map(h=>'<option value="'+h.id+'"'+(s.hooldaja===h.id?' selected':'')+'>'+esc(h.nimi)+'</option>').join('')+'</select></div></div>'+
+   (muuda?(s.too?'<div class="hoiatus">'+ik('mootja')+'<span>Seadmel on avatud hoolduse töökäsk. Vaata vahekaardilt „Hooldus“.</span></div>':'<button type="button" id="s_hooldusse">'+ik('mootja')+'Saada hooldusesse (töökäsk)</button>'):'')+
    '<h3 style="margin:18px 0 4px">Hooldus (korduv)</h3><p class="vaike" style="margin:0 0 6px">Nt hooldus 1× aastas, filtrid 2× aastas, kontroll 1× 2 aasta jooksul. Läheb kalendrisse; üle tähtaja on hoiatus, võtmist ei keela.</p><div id="h_list"></div><button type="button" id="h_lisa">+ Lisa hooldus</button>'+
    '<div style="height:14px"></div>'+
    '<button class="roh" id="s_salv">'+(muuda?'Salvesta':'Lisa seade')+'</button> '+(muuda?'<button id="s_loobu">Loobu</button> <button id="s_ajalugu">Ajalugu</button>':'')+'<div id="s_teade"></div><div id="s_aj"></div></div>'+
@@ -772,11 +887,11 @@ function seadmed(muuda,seo){
    U.seadmed.map(x=>'<tr data-kood="'+x.kood+'"'+kustStiil(x)+'><td><input type="checkbox" class="vali" value="'+x.kood+'" style="width:auto"></td><td><a href="#" data-muuda="'+x.kood+'">'+esc(x.nimi)+'</a><br><span class="vaike">'+esc(x.tyyp)+'</span></td><td>'+esc(x.invnr)+'<br><span class="vaike">'+esc(x.seerianr)+'</span></td><td>'+esc(x.taatlus_kuni||'')+'</td><td>'+OLEK[x.olek]+'</td><td>'+(x.kellel?esc(x.kellel.nimi):esc(x.asukoht_nimi))+'</td><td class="vaike">'+x.kood+'</td><td>'+kustNupp('seade',x.kood,x)+'</td></tr>').join('')+'</table>'+
    '<p><button id="csv">⬇ Seadmed CSV</button></p>';
   $('#s_salv').onclick=async()=>{const j=await a('seade',{kood:muuda?muuda.kood:undefined,uus_kood:$('#s_kood')?$('#s_kood').value.trim():undefined,nimi:$('#s_nimi').value,tyyp:$('#s_tyyp').value,invnr:$('#s_invnr').value,seerianr:$('#s_seerianr').value,taatlus_kuni:$('#s_taatlus').value,taatlus_intervall:$('#s_intervall').value,olek:$('#s_olek').value,asukoht:$('#s_asukoht').value,lisainfo:$('#s_lisa').value,
-      tootja:$('#s_tootja').value,mudel:$('#s_mudel').value,ost_kuupaev:$('#s_ostkp').value,ost_hind:$('#s_hind').value.trim(),ost_muuja:$('#s_muuja').value,garantii_kuni:$('#s_garantii').value,
+      tootja:$('#s_tootja').value,mudel:$('#s_mudel').value,hooldaja:$('#s_hooldaja').value,ost_kuupaev:$('#s_ostkp').value,ost_hind:$('#s_hind').value.trim(),ost_muuja:$('#s_muuja').value,garantii_kuni:$('#s_garantii').value,
       hooldused:HOOLD.map(h=>({id:h.id,nimi:h.nimi,intervall:+h.intervall,viimati:h.viimati||'',jargmine:h.jargmine||'',hoiatus_paevi:h.hoiatus_paevi===''?'':+h.hoiatus_paevi})),
       dokumendid_lisa:DOK_UUS.map(d=>d.voti),dokumendid_eemalda:[...DOK_EEM]});
     if(!j.ok){$('#s_teade').innerHTML='<div class="viga">'+esc(j.viga)+'</div>';return;} U=await a('ulevaade'); seadmed(); $('#s_teade').innerHTML='<div class="ok">Salvestatud: '+esc(j.seade.nimi)+' ('+j.seade.kood+')</div>';};
-  dokSeo(s); hooldusSeo(s,muuda);
+  dokSeo(s); hooldusSeo(s,muuda); if($('#s_hooldusse'))$('#s_hooldusse').onclick=()=>{TAB='hooldus';tabs();hooldus(muuda.kood);};
   if($('#s_loobu'))$('#s_loobu').onclick=()=>seadmed();
   $('#partiid').onclick=()=>partiid();
   if($('#s_skann')){

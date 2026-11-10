@@ -45,6 +45,8 @@ export default {
       const ver = versioon(env);
       if (tee === '/' || tee === '/index.html') return html(appLeht, { ver });
       if (m) return html(appLeht, { ver, [{ S: 'seade', K: 'koht', I: 'info' }[m[1].toUpperCase()]]: m[2].toUpperCase() });
+      const hm = /^\/H\/([0-9A-Z]{32})\/?$/.exec(tee); // hoolduse töökäsu link (Margo 10.11.2026)
+      if (hm) return html(appLeht, { ver, hooldus: hm[1] });
       if (tee === '/admin') return html(adminLeht, { ver });
       if (tee === '/dev') return html(devLeht, { ver });
       if (tee === '/api/versioon') return new Response(JSON.stringify(ver), { headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' } });
