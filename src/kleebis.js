@@ -60,4 +60,55 @@ function kleebisSvg(q,id,v,ilma){
     +'<text x="'+H+'" y="'+r(E+C)+'" '+f+'>'+t+'</text>'
     +'<text transform="translate('+r(B)+' '+H+') rotate(-90)" '+f+'>'+t+'</text>'
     +'<text transform="translate('+r(S-2.3)+' '+r(S-4.6)+') rotate(90)" font-family="monospace" font-size="1.3" textLength="3" lengthAdjust="spacingAndGlyphs" fill="#000">'+k+'</text>';
+}
+// ---------- Kindaveli kleebised valikutega (Margo 10.11.2026; kujundus K | KODU „B“: margo875/qrkodu avalik/kleebised.js) ----------
+// Valikud: sama koodiga QR-ide arv 0–6, suurus 100/90/80/70/60 %, leidja kleebis: „TEATA LEIUST“ neljal küljel /
+// oma tekst kahel küljel (üleval ja all, kumbki kuni 20 märki, nt firma nimi) / ilma. Leidja raam: tume ümbris #1C1C1A,
+// tellisepunased nurgad #A33B20, valge kiri Instrument Sans Bold 7 pt, välisraadius 1,5 mm. 100 %: leidja 26 mm, QR 19,5 mm
+// (koos 4 mooduli vaikse äärega). Lõikejoon 60 % hall 0,1 mm. Ühik 1 mm.
+var KV={L:26,Q:19.5,R:1.5,fs:7*25.4/72,mastaabid:[1,0.9,0.8,0.7,0.6],qrMax:6,tekstMax:20,umbris:'#1C1C1A',nurk:'#A33B20',loige:'#999999'};
+function kvValik(v){
+  v=v||{};var m=Number(v.mastaap==null?1:v.mastaap),q=Number(v.qr==null?3:v.qr),l=v.leidja||'teata';
+  if(KV.mastaabid.indexOf(m)<0)throw new Error('Suurus peab olema 100, 90, 80, 70 või 60 %.');
+  if(!(q>=0&&q<=KV.qrMax&&Math.floor(q)===q))throw new Error('Sama koodiga QR-e saab olla 0–'+KV.qrMax+'.');
+  if(['teata','tekst','pole'].indexOf(l)<0)throw new Error('Leidja kleebise valik on vigane.');
+  var puh=function(t){return String(t==null?'':t).replace(/[\u0000-\u001f\u007f]/g,' ').replace(/\s+/g,' ').trim().slice(0,KV.tekstMax).toUpperCase();};
+  var y=puh(v.ylal),a=puh(v.all);
+  if(l==='tekst'&&!y&&!a)throw new Error('Kirjuta vähemalt üks tekst (üles või alla).');
+  if(l==='pole'&&!q)throw new Error('Vali vähemalt üks kleebis koodi kohta.');
+  return {mastaap:m,qr:q,leidja:l,ylal:l==='tekst'?y:'',all:l==='tekst'?a:''};
+}
+// Instrument Sans Bold suurtähtede ligikaudsed laiused (em); teksti laius mm-des
+function kvLaius(t){var w=0,i,c;for(i=0;i<t.length;i++){c=t.charAt(i);w+=/[MW]/.test(c)?0.86:/[I1 .,:;'!|]/.test(c)?0.3:/[0-9]/.test(c)?0.6:/[A-ZÕÄÖÜŠŽ&]/.test(c)?0.66:0.62;}return w*KV.fs;}
+function kvKiri(t,x,y,nurk,maxL){
+  var r=function(z){return +z.toFixed(3);},w=kvLaius(t),
+    o=' font-family="Instrument Sans, Arial, sans-serif" font-weight="700" font-size="'+r(KV.fs)+'" fill="#fff" text-anchor="middle" dominant-baseline="central"'+(w>maxL?' textLength="'+r(maxL)+'" lengthAdjust="spacingAndGlyphs"':'');
+  return '<text transform="translate('+r(x)+' '+r(y)+') rotate('+nurk+')"'+o+'>'+kEsc(t)+'</text>';
+}
+// Leidja kleebis (100 % mõõdus, mastaap rakendatakse väljaspool). q = {n, p} (QR ilma vaikse ääreta).
+function kvLeidja(q,valik){
+  var r=function(z){return +z.toFixed(4);},S=KV.L,Q=KV.Q,B=(S-Q)/2,m=Q/(q.n+8),H=S/2,o=1,maxL=S-2*(o+1.9);
+  var g='<rect x="0" y="0" width="'+S+'" height="'+S+'" rx="'+KV.R+'" fill="'+KV.umbris+'"/>'
+    +'<rect x="'+r(B)+'" y="'+r(B)+'" width="'+Q+'" height="'+Q+'" rx=".5" fill="#fff"/>'
+    +'<path transform="translate('+r(B+4*m)+' '+r(B+4*m)+') scale('+m.toFixed(5)+')" d="'+q.p+'" fill="'+KV.umbris+'" shape-rendering="crispEdges"/>';
+  var tk=B/2;
+  if(valik.leidja==='teata'){var t='TEATA LEIUST';g+=kvKiri(t,H,tk,0,maxL)+kvKiri(t,S-tk,H,90,maxL)+kvKiri(t,H,S-tk,0,maxL)+kvKiri(t,tk,H,-90,maxL);}
+  else{if(valik.ylal)g+=kvKiri(valik.ylal,H,tk,0,maxL);if(valik.all)g+=kvKiri(valik.all,H,S-tk,0,maxL);}
+  // nurgad: ülemised kaldu („katus“), alumised täisnurk, 1 mm servast (nagu K | KODU B-kleebisel)
+  var p='M'+o+' '+r(o+1.6)+'V'+r(o+0.7)+'L'+r(o+1.4)+' '+o+'M'+r(S-o)+' '+r(o+1.6)+'V'+r(o+0.7)+'L'+r(S-o-1.4)+' '+o
+    +'M'+o+' '+r(S-o-1.4)+'V'+r(S-o)+'H'+r(o+1.4)+'M'+r(S-o)+' '+r(S-o-1.4)+'V'+r(S-o)+'H'+r(S-o-1.4);
+  return g+'<path d="'+p+'" fill="none" stroke="'+KV.nurk+'" stroke-width=".45" stroke-linecap="round" stroke-linejoin="round"/>';
+}
+// Tekstita QR-kleebis (100 % mõõdus): valge, lõikejoon raadiusega
+function kvQr(q){
+  var Q=KV.Q,m=Q/(q.n+8);
+  return '<rect x=".05" y=".05" width="'+(Q-.1)+'" height="'+(Q-.1)+'" rx="'+KV.R+'" fill="#fff" stroke="'+KV.loige+'" stroke-width=".1"/>'
+    +'<path transform="translate('+(4*m).toFixed(4)+' '+(4*m).toFixed(4)+') scale('+m.toFixed(5)+')" d="'+q.p+'" fill="#000" shape-rendering="crispEdges"/>';
+}
+// Ühe koodi rida: [[laius, kõrgus, svg-sisu (juba mastaabis)], …]
+function kvRida(q,valik){
+  var k=valik.mastaap,osad=[],gm=function(sisu,w){return [+(w*k).toFixed(3),+(w*k).toFixed(3),'<g transform="scale('+k+')">'+sisu+'</g>'];};
+  if(valik.leidja!=='pole')osad.push(gm(kvLeidja(q,valik),KV.L));
+  for(var i=0;i<valik.qr;i++)osad.push(gm(kvQr(q),KV.Q));
+  return osad;
 }`;

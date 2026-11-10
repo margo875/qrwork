@@ -2,7 +2,9 @@
 // oleks järjepidev (üks eksemplar, päringud järjest; kahe inimese samaaegne võtmine ei saa mõlemale õnnestuda).
 //
 // Võtmed (DO storage):
-//   seade:<kood>                 registrikirje (muudab ainult haldur)
+//   seade:<kood>                 registrikirje (muudab ainult haldur); ostuandmed ja dokumendid (seade.dokumendid) näeb ainult haldur
+//   dok:<R2 võti>                üles laaditud, seadmega veel sidumata dokument (seotakse seadme salvestamisel)
+//   ai:<AAAA-KK-PP>              pildilugemiste arv sel päeval (kulude piir)
 //   laen:<kood>                  kehtiv kasutus {kood, kasutaja, alates, koht}; puudub = seade on vaba
 //   kasutaja:<id>, tel:<+372…>   kasutaja ja telefoni indeks
 //   sess:<sha256(token)>         sessioon (küpsis qw_sess, 180 päeva)
@@ -13,6 +15,7 @@
 //   logi:<inv>:<r>, ajalugu:<kood>:<inv>:<r>   sündmused (inv = TS_MAX − aeg, uusimad ees)
 //   koht:<kood>                  töökoht (töökoha QR)
 //   seaded                       firma seaded
+import { AI_MUDEL, AI_PAEVAS, AI_PILT_MAX, AI_JUHIS, DOK_MAX, DOK_ARV_MAX, DOK_LIIGID, DOK_RE, DOK_MIME, dokTyyp, aiJson, dokValjad, hindArvuks } from './dokumendid.js';
 import { teavita } from './teavita.js';
 
 export const TAHED = '0123456789ABCDEFGHJKMNPQRSTVWXYZ'; // Crockford Base32, ilma I L O U
@@ -436,6 +439,11 @@ export class Register {
       if (seade.taatlus_kuni < t) hoiatused.push(`Taatlus/kalibreerimine aegunud (${seade.taatlus_kuni})`);
       else if (Date.parse(seade.taatlus_kuni) - Date.parse(t) <= seaded.taatlus_hoiatus_paevi * 86400000) hoiatused.push(`Taatlus/kalibreerimine aegub ${seade.taatlus_kuni}`);
     }
+    for (const h of seade.hooldused || []) {
+      const t = tana(nyyd);
+      if (h.jargmine < t) hoiatused.push(`Hooldus üle tähtaja: ${h.nimi} (${h.jargmine})`);
+      else if (Date.parse(h.jargmine) - Date.parse(t) <= h.hoiatus_paevi * 86400000) hoiatused.push(`Hooldus tulekul: ${h.nimi} (${h.jargmine})`);
+    }
     for (const m of margmed) if (m.tyyp !== 'muu') hoiatused.push(`${MARKE_TYYBID[m.tyyp]} (${m.nimi}, ${eestiAeg(m.aeg)})`);
     const bron = await this.broneeringud(seade.kood, nyyd);
     const taatlusViimane = (await this.loend(`taatlus:${seade.kood}:`, 1)).map(([, x]) => x)[0] || null;
@@ -457,7 +465,8 @@ export class Register {
       .map((x) => ({ aeg: x.aeg, tyyp: x.tyyp, nimi: x.nimi, eelmise_nimi: x.eelmise_nimi || x.uus || '', marge: x.marge || '', foto: !!x.foto }));
     return {
       ajalugu,
-      kood: seade.kood, nimi: seade.nimi, tyyp: seade.tyyp || '', invnr: seade.invnr || '', seerianr: seade.seerianr || '',
+      kood: seade.kood, nimi: seade.nimi, tyyp: seade.tyyp || '', invnr: seade.invnr || '', seerianr: seade.seerianr || '', tootja: seade.tootja || '', mudel: seade.mudel || '',
+      hooldused: (seade.hooldused || []).map((h) => ({ nimi: h.nimi, jargmine: h.jargmine, viimati: h.viimati })),
       taatlus_kuni: seade.taatlus_kuni || null, olek: seade.olek, lisainfo: seade.lisainfo || '', asukoht, kellel, margmed, hoiatused, taatlus,
       bron: bron.map((b) => ({ id: b.id, algus: b.algus, lopp: b.lopp, nimi: b.nimi, tel: b.tel, kasutaja: b.kasutaja, markus: b.markus || '' })),
     };
@@ -654,6 +663,14 @@ export class Register {
       tl.push('BEGIN:VEVENT', `UID:taatlus-${s.kood}-${pv(s.taatlus_kuni)}@kratt`, `DTSTAMP:${stamp}`, `DTSTART;VALUE=DATE:${pv(s.taatlus_kuni)}`, `DTEND;VALUE=DATE:${jargmine(s.taatlus_kuni)}`,
         `SUMMARY:${e(`Taatlus: ${s.nimi}${s.invnr ? ` (${s.invnr})` : ''}`)}`, `DESCRIPTION:${e(`Taatlus/kalibreerimine kehtib kuni ${s.taatlus_kuni}.`)}`,
         'BEGIN:VALARM', 'ACTION:DISPLAY', `DESCRIPTION:${e(`Taatlus aegub: ${s.nimi}`)}`, `TRIGGER:-P${seaded.taatlus_hoiatus_paevi || 30}D`, 'END:VALARM', 'END:VEVENT');
+    }
+    for (const [, s] of await this.elusLoend('seade:')) {
+      if (s.olek === 'maha') continue;
+      for (const h of s.hooldused || []) {
+        tl.push('BEGIN:VEVENT', `UID:hooldus-${s.kood}-${h.id}-${pv(h.jargmine)}@kratt`, `DTSTAMP:${stamp}`, `DTSTART;VALUE=DATE:${pv(h.jargmine)}`, `DTEND;VALUE=DATE:${jargmine(h.jargmine)}`,
+          `SUMMARY:${e(`Hooldus: ${h.nimi} – ${s.nimi}${s.invnr ? ` (${s.invnr})` : ''}`)}`, `DESCRIPTION:${e(`Kordub iga ${h.intervall} kuu järel.${h.viimati ? ` Viimati ${h.viimati}.` : ''}`)}`,
+          'BEGIN:VALARM', 'ACTION:DISPLAY', `DESCRIPTION:${e(`Hooldus: ${h.nimi} – ${s.nimi}`)}`, `TRIGGER:-P${h.hoiatus_paevi}D`, 'END:VALARM', 'END:VEVENT');
+      }
     }
     const t = tana(Date.now());
     for (const [, b] of await this.loend('bron:')) {
@@ -938,6 +955,14 @@ export class Register {
       if (tee === 'logi.csv') return this.logiCsv();
       if (tee === 'partiid') return json({ ok: true, partiid: await this.partiid() });
       if (tee === 'taatlused') { const kk = normKood(url.searchParams.get('kood') || ''); return json({ ok: true, taatlused: kk ? (await this.loend(`taatlus:${kk}:`, 50)).map(([, x]) => x) : [] }); }
+      if (tee === 'hooldused') { const kk = normKood(url.searchParams.get('kood') || ''); return json({ ok: true, hooldused: kk ? (await this.loend(`hooldus:${kk}:`, 50)).map(([, x]) => x) : [] }); }
+      if (tee === 'dokument') {
+        const v = url.searchParams.get('k') || '';
+        if (!DOK_RE.test(v) || !this.env.FOTOD) return viga('ei leitud', 404);
+        const o = await this.env.FOTOD.get(v);
+        if (!o) return viga('ei leitud', 404);
+        return new Response(o.body, { headers: { 'Content-Type': DOK_MIME[v.split('.').pop()], 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; sandbox", 'Content-Disposition': 'inline' } });
+      }
       if (tee === 'foto') {
         const v = url.searchParams.get('k') || '';
         if (!FOTO_RE.test(v) || !this.env.FOTOD) return viga('ei leitud', 404);
@@ -948,6 +973,8 @@ export class Register {
       return viga('tundmatu', 404);
     }
     if (request.method !== 'POST') return viga('meetod', 405);
+    if (tee === 'dokument') return this.dokumentUles(request, url);
+    if (tee === 'loe') return this.pildiltLoe(request, url);
     const b = await loeJson(request);
     if (b === null) return viga('vigane päring');
     switch (tee) {
@@ -970,6 +997,8 @@ export class Register {
       case 'taatlus': return this.adminTaatlus(b);
       case 'bron-tyhista': return this.bronTyhista(null, b, true);
       case 'kalender': return this.adminKalender(b);
+      case 'ai-litsents': return this.aiLitsents();
+      case 'hooldus-tehtud': return this.hooldusTehtud(b);
     }
     return viga('tundmatu', 404);
   }
@@ -1002,7 +1031,7 @@ export class Register {
     for (const [, b] of await this.loend('bron:')) if (b.lopp >= t) broneeringud.push({ ...b, nimi: kasutajad.get(b.kasutaja)?.nimi || '?', tel: kasutajad.get(b.kasutaja)?.tel || '', seade: seadmed.find((x) => x.kood === b.kood)?.nimi || '?' });
     broneeringud.sort((a, b) => (a.algus < b.algus ? -1 : 1));
     const viimane = (await this.loend('logi:', 1)).map(([, x]) => x.aeg)[0] || 0;
-    return { ok: true, seaded, foto_olemas: !!this.env.FOTOD, kohad, seadmed, kasutajad: kas, kinnitused, vaidlused, margmed, broneeringud, logi_viimane: viimane };
+    return { ok: true, seaded, foto_olemas: !!this.env.FOTOD, ai_olemas: !!this.env.AI, ai_paevas: AI_PAEVAS, kohad, seadmed, kasutajad: kas, kinnitused, vaidlused, margmed, broneeringud, logi_viimane: viimane };
   }
 
   async adminSeade(b) {
@@ -1040,15 +1069,34 @@ export class Register {
       await this.s.put(lv, n);
       invnr = `${lyh}-${aakk}${String(n).padStart(3, '0')}`;
     }
+    // Ostuandmed, tootja/mudel ja hooldus (Margo 10.11.2026): muudetakse ainult siis, kui väli on päringus (osalised salvestused,
+    // nt „Saada taatlusele“, ei kustuta neid). Hinda ja dokumente näeb ainult haldur.
+    const lisa = {};
+    for (const [v, max] of [['tootja', 60], ['mudel', 60], ['ost_muuja', 80]]) if (b[v] !== undefined) lisa[v] = puhasta(b[v], max);
+    for (const v of ['ost_kuupaev', 'garantii_kuni']) if (b[v] !== undefined) { if (b[v] === '' || b[v] === null) lisa[v] = null; else { lisa[v] = kuupaev(b[v]); if (!lisa[v]) return viga('Vigane kuupäev (AAAA-KK-PP).'); } }
+    if (b.ost_hind !== undefined) { if (b.ost_hind === '' || b.ost_hind === null) lisa.ost_hind = null; else { lisa.ost_hind = hindArvuks(String(b.ost_hind)); if (lisa.ost_hind === null) return viga('Vigane hind.'); } }
+    if (b.hooldused !== undefined) { const h = hooldusPlaanid(b.hooldused); if (typeof h === 'string') return viga(h); lisa.hooldused = h; }
+    let dok = (s?.dokumendid || []).slice();
+    if (Array.isArray(b.dokumendid_eemalda)) for (const v of b.dokumendid_eemalda) { const d = dok.find((x) => x.voti === v && !x.kustutatud); if (d) d.kustutatud = Date.now(); }
+    const uuedDok = [];
+    if (Array.isArray(b.dokumendid_lisa)) for (const v of b.dokumendid_lisa.slice(0, DOK_ARV_MAX)) {
+      if (typeof v !== 'string' || !DOK_RE.test(v) || dok.some((x) => x.voti === v)) continue;
+      const d = await this.s.get(`dok:${v}`); if (!d) return viga('Dokumenti ei leitud (lae uuesti üles).');
+      dok.push(d); uuedDok.push(v);
+    }
+    if (dok.filter((x) => !x.kustutatud).length > DOK_ARV_MAX) return viga(`Seadmel saab olla kuni ${DOK_ARV_MAX} dokumenti.`);
+    if (b.dokumendid_lisa !== undefined || b.dokumendid_eemalda !== undefined) lisa.dokumendid = dok;
     let k = kood;
     if (uus && !k) do k = juhuslik(12); while (await this.s.get(`seade:${k}`) || await this.s.get(`koht:${k}`));
     const kirje = {
       ...(s || { loodud: Date.now() }), kood: k, nimi, tyyp: puhasta(b.tyyp, 60), invnr, seerianr: puhasta(b.seerianr, 60),
       taatlus_kuni: taatlus, taatlus_intervall: intervall, olek, lisainfo: puhastaMitmerealine(b.lisainfo, 500), koduladu: ladu ? koduladu : null, muudetud: Date.now(),
+      ...lisa,
     };
     if (uus) kirje.reg_ladu = ladu ? koduladu : null;
     await this.s.put(`seade:${k}`, kirje);
-    await this.logi({ tyyp: uus ? 'seade_lisatud' : 'seade_muudetud', kood: k, nimi: 'haldur', seade: nimi });
+    for (const v of uuedDok) await this.s.delete(`dok:${v}`); // seotud: sama faili ei saa teisele seadmele siduda
+    await this.logi({ tyyp: uus ? 'seade_lisatud' : 'seade_muudetud', kood: k, nimi: 'haldur', seade: nimi, ...(uuedDok.length ? { tekst: `dokumente lisatud: ${uuedDok.length}` } : {}) });
     return json({ ok: true, seade: kirje });
   }
 
@@ -1133,7 +1181,10 @@ export class Register {
         if (!x.kustutatud) continue;
         if (nyyd - x.kustutatud < KUSTUTUS_MS) { const t = x.kustutatud + KUSTUTUS_MS; if (!jargmine || t < jargmine) jargmine = t; continue; }
         await this.s.delete(v);
-        if (liik === 'seade') for (const p of [`marge:${x.kood}:`, `ajalugu:${x.kood}:`, `bron:${x.kood}:`, `taatlus:${x.kood}:`]) for (const [k2] of await this.loend(p)) await this.s.delete(k2);
+        if (liik === 'seade') {
+          for (const p of [`marge:${x.kood}:`, `ajalugu:${x.kood}:`, `bron:${x.kood}:`, `taatlus:${x.kood}:`, `hooldus:${x.kood}:`]) for (const [k2] of await this.loend(p)) await this.s.delete(k2);
+          if (this.env.FOTOD) for (const d of x.dokumendid || []) await this.env.FOTOD.delete(d.voti).catch(() => {}); // arved, andmesildid
+        }
         if (liik === 'seade') { const pk = await this.s.get(`pkood:${x.kood}`); if (pk) await this.s.put(`pkood:${x.kood}`, { ...pk, kasutatud: true, seade: x.nimi }); } // partii kleebis on kasutatud: ei muutu uuesti vabaks
         if (liik === 'kasutaja') {
           if (x.tel && (await this.s.get(`tel:${x.tel}`)) === x.id) await this.s.delete(`tel:${x.tel}`);
@@ -1234,10 +1285,89 @@ export class Register {
     return json({ ok: true, seaded: s });
   }
 
+  // Hooldus tehtud: viimati = kuupäev, järgmine = kuupäev + kordus (või sisestatud). Ajalugu: hooldus:<kood>:<inv>.
+  async hooldusTehtud({ kood, id, kuupaev: kp, jargmine, tegija, markus, kulu }) {
+    const kk = normKood(kood || '');
+    const s = kk ? await this.elus(`seade:${kk}`) : null;
+    if (!s) return viga('Seadet ei leitud', 404);
+    const h = (s.hooldused || []).find((x) => x.id === id);
+    if (!h) return viga('Hooldusplaani ei leitud', 404);
+    const d = kuupaev(kp); if (!d) return viga('Sisesta hoolduse kuupäev.');
+    if (d > tana(Date.now())) return viga('Hoolduse kuupäev ei saa olla tulevikus.');
+    const j = jargmine ? kuupaev(jargmine) : kuudLisa(d, h.intervall);
+    if (!j) return viga('Vigane järgmine kuupäev.');
+    let kuluN = null; if (kulu !== undefined && kulu !== '' && kulu !== null) { kuluN = hindArvuks(String(kulu)); if (kuluN === null) return viga('Vigane kulu.'); }
+    h.viimati = d; h.jargmine = j; if (tegija !== undefined) h.tegija = puhasta(tegija, 80);
+    s.muudetud = Date.now();
+    await this.s.put(`seade:${kk}`, s);
+    const kirje = { kood: kk, plaan: h.id, nimi: h.nimi, kuupaev: d, jargmine: j, tegija: h.tegija || '', markus: puhasta(markus, 300), kulu: kuluN, aeg: Date.now() };
+    await this.s.put(`hooldus:${kk}:${String(1e15 - Date.now()).padStart(16, '0')}:${juhuslik(4)}`, kirje);
+    await this.logi({ tyyp: 'hooldus', kood: kk, nimi: 'haldur', seade: s.nimi, tekst: `${h.nimi} ${d}${kirje.markus ? ': ' + kirje.markus : ''}` });
+    return json({ ok: true, hooldus: kirje, seade: s });
+  }
+
+  // ---------- dokumendid ja pildilt lugemine (Margo 10.11.2026) ----------
+  // Originaalfail (foto või PDF, ≤ 10 MB) läheb R2-sse muutmata kujul; seadmega seotakse see seadme salvestamisel (dokumendid_lisa).
+  async dokumentUles(request, url) {
+    if (!this.env.FOTOD) return viga('Failide hoidla (R2, FOTOD) ei ole seadistatud.', 501);
+    if (Number(request.headers.get('Content-Length') || 0) > DOK_MAX) return viga('Fail on liiga suur (kuni 10 MB).', 413);
+    const b = await loeKeha(request, DOK_MAX);
+    if (!b || b.length < 100) return viga('Fail on liiga suur või tühi.', 413);
+    const t = dokTyyp(b);
+    if (!t) return viga('Lubatud on foto (JPEG, PNG, WebP) või PDF.', 415);
+    const liik = DOK_LIIGID[url.searchParams.get('liik')] ? url.searchParams.get('liik') : 'muu';
+    const nimi = puhasta(url.searchParams.get('nimi') || '', 80).replace(/[\\/<>:"|?*]/g, '_');
+    const nyyd = Date.now();
+    const voti = `d/${tana(nyyd).slice(0, 7).replace('-', '')}/${String(nyyd).padStart(13, '0')}-${juhuslik(6)}.${t}`;
+    await this.env.FOTOD.put(voti, b, { httpMetadata: { contentType: DOK_MIME[t] } });
+    const kirje = { voti, liik, nimi, mime: DOK_MIME[t], suurus: b.length, aeg: nyyd };
+    await this.s.put(`dok:${voti}`, kirje);
+    return json({ ok: true, dokument: kirje });
+  }
+  async aiLubatud() {
+    const v = `ai:${tana(Date.now())}`, n = (await this.s.get(v)) || 0;
+    if (n >= AI_PAEVAS) return false;
+    await this.s.put(v, n + 1);
+    return true;
+  }
+  // Pildilt lugemine: brauser saadab vähendatud JPEG-i (≤ 1600 px); mudel annab ettepaneku, mida haldur kontrollib. Pilti ei salvestata.
+  async pildiltLoe(request, url) {
+    if (!this.env.AI || typeof this.env.AI.run !== 'function') return viga('Pildilt lugemine ei ole seadistatud (Workers AI, sidumine AI). Täida väljad käsitsi.', 501);
+    const liik = url.searchParams.get('liik') === 'andmesilt' ? 'andmesilt' : 'arve';
+    if (Number(request.headers.get('Content-Length') || 0) > AI_PILT_MAX) return viga('Pilt on liiga suur.', 413);
+    const b = await loeKeha(request, AI_PILT_MAX);
+    if (!b || b.length < 100) return viga('Pilt on liiga suur või tühi.', 413);
+    const t = dokTyyp(b);
+    if (!t || t === 'pdf') return viga('Lugeda saab ainult fotot (JPEG, PNG, WebP).', 415);
+    if (!(await this.aiLubatud())) return viga(`Pildilt lugemise päevane piir (${AI_PAEVAS}) on täis. Täida väljad käsitsi või proovi homme.`, 429);
+    let vastus;
+    try {
+      // [KONTROLLIMATA päris Workers AI-s] sisend nagu K | KODU-s: messages + image (baitide massiiv)
+      vastus = await this.env.AI.run(AI_MUDEL, {
+        messages: [{ role: 'user', content: AI_JUHIS[liik] + '\n\nRead this photo and return the JSON object.' }],
+        image: [...b], max_tokens: 300, temperature: 0,
+      });
+    } catch (e) {
+      console.error('pildilt lugemine', e);
+      if (/agree|licen[cs]e/i.test(String(e?.message || e))) return viga('Pildimudeli litsents on kinnitamata. Haldus → Seaded → „Nõustun pildimudeli litsentsiga“.', 503);
+      return viga('Pildilt lugemine ebaõnnestus. Proovi uuesti või täida käsitsi.', 502);
+    }
+    return json({ ok: true, liik, ettepanek: dokValjad(aiJson(vastus), liik, tana(Date.now())), mudel: AI_MUDEL });
+  }
+  // Meta Llama 3.2 Vision nõuab Cloudflare'is ühekordset nõustumist (päring tekstiga „agree“). Haldur teeb seda nupuga.
+  async aiLitsents() {
+    if (!this.env.AI || typeof this.env.AI.run !== 'function') return viga('Workers AI sidumine nimega AI puudub.', 501);
+    try { await this.env.AI.run(AI_MUDEL, { prompt: 'agree' }); } catch (e) { console.error(e); return viga('Cloudflare ei võtnud nõusolekut vastu. Proovi hiljem uuesti.', 502); }
+    const s = await this.seaded(); s.ai_litsents = { mudel: AI_MUDEL, aeg: Date.now() }; await this.s.put('seaded', s);
+    await this.logi({ tyyp: 'ai_litsents', nimi: 'haldur', tekst: AI_MUDEL });
+    return json({ ok: true, ai_litsents: s.ai_litsents });
+  }
+
   async seadmedCsv() {
     const u = await this.ulevaade();
-    const read = [['kood', 'nimi', 'tüüp', 'inventarinr', 'seerianr', 'taatlus_kuni', 'olek', 'asukoht', 'kellel', 'telefon', 'alates'].join(';')];
-    for (const s of u.seadmed) read.push([s.kood, s.nimi, s.tyyp, s.invnr, s.seerianr, s.taatlus_kuni, s.olek, s.asukoht_nimi, s.kellel?.nimi, s.kellel?.tel, s.kellel ? eestiAeg(s.kellel.alates) : ''].map(csvLahter).join(';'));
+    const read = [['kood', 'nimi', 'tüüp', 'tootja', 'mudel', 'inventarinr', 'seerianr', 'taatlus_kuni', 'olek', 'asukoht', 'kellel', 'telefon', 'alates', 'ostukuupäev', 'hind_km_ta', 'müüja', 'garantii_kuni', 'dokumente'].join(';')];
+    for (const s of u.seadmed) read.push([s.kood, s.nimi, s.tyyp, s.tootja, s.mudel, s.invnr, s.seerianr, s.taatlus_kuni, s.olek, s.asukoht_nimi, s.kellel?.nimi, s.kellel?.tel, s.kellel ? eestiAeg(s.kellel.alates) : '',
+      s.ost_kuupaev, s.ost_hind == null ? '' : String(s.ost_hind).replace('.', ','), s.ost_muuja, s.garantii_kuni, (s.dokumendid || []).filter((d) => !d.kustutatud).length].map(csvLahter).join(';'));
     return new Response('﻿' + read.join('\r\n'), { headers: { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': 'attachment; filename="seadmed.csv"', 'Cache-Control': 'no-store' } });
   }
   async logiCsv() {
@@ -1326,6 +1456,34 @@ async function loeKeha(request, max) {
   let o = 0;
   for (const x of osad) { out.set(x, o); o += x.length; }
   return out;
+}
+
+// Hooldusplaanid (Margo 10.11.2026): korduv hooldus (nt 6 / 12 / 24 kuud), meeldetuletus X päeva enne, kalendrisse ja hoiatus.
+// Üle tähtaja hooldus EI keela võtmist (ainult hoiatus). Tagastab puhastatud massiivi või veateate (string).
+export const HOOLDUS_MAX = 10;
+export function kuudLisa(d, kuud) { const x = new Date(d + 'T12:00:00Z'), p = x.getUTCDate(); x.setUTCDate(1); x.setUTCMonth(x.getUTCMonth() + kuud); x.setUTCDate(Math.min(p, new Date(Date.UTC(x.getUTCFullYear(), x.getUTCMonth() + 1, 0)).getUTCDate())); return x.toISOString().slice(0, 10); }
+export function hooldusPlaanid(l) {
+  if (!Array.isArray(l)) return 'Vigased hooldused.';
+  if (l.length > HOOLDUS_MAX) return `Seadmel saab olla kuni ${HOOLDUS_MAX} hooldusplaani.`;
+  const valja = [];
+  for (const h of l) {
+    if (!h || typeof h !== 'object') return 'Vigane hooldus.';
+    const nimi = puhasta(h.nimi, 60);
+    if (nimi.length < 2) return 'Sisesta hoolduse nimi (nt „hooldus“, „filtrite vahetus“).';
+    const iv = Number(h.intervall);
+    if (!Number.isInteger(iv) || iv < 1 || iv > 120) return `Hoolduse „${nimi}“ kordus peab olema 1–120 kuud.`;
+    const viimati = h.viimati ? kuupaev(h.viimati) : null;
+    if (h.viimati && !viimati) return `Hoolduse „${nimi}“ viimane kuupäev on vigane.`;
+    let jargmine = h.jargmine ? kuupaev(h.jargmine) : null;
+    if (h.jargmine && !jargmine) return `Hoolduse „${nimi}“ järgmine kuupäev on vigane.`;
+    if (!jargmine && viimati) jargmine = kuudLisa(viimati, iv);
+    if (!jargmine) return `Hoolduse „${nimi}“ juures sisesta viimane või järgmine kuupäev.`;
+    const hp = h.hoiatus_paevi === undefined || h.hoiatus_paevi === '' ? 14 : Number(h.hoiatus_paevi);
+    if (!Number.isInteger(hp) || hp < 0 || hp > 180) return 'Meeldetuletus 0–180 päeva enne.';
+    const id = typeof h.id === 'string' && /^[0-9A-Z]{6}$/.test(h.id) ? h.id : juhuslik(6);
+    valja.push({ id, nimi, intervall: iv, viimati, jargmine, hoiatus_paevi: hp, tegija: puhasta(h.tegija, 80) });
+  }
+  return valja;
 }
 
 async function loeJson(request) {

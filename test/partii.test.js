@@ -95,3 +95,25 @@ test('halduse seadmevormis on QR-skänner (sama lugeja mis rakenduses)', async (
   assert.match(h, /function koodTekstist/); assert.match(h, /async function kaamera\(video,onTekst,teade\)/);
   assert.match(appLeht('n', {}), /async function kaamera\(video,onTekst,teade\)/);
 });
+
+test('kleebised valikutega (Margo 10.11.2026): suurus 100–60 %, QR-ide arv, leidja „TEATA LEIUST“ / oma tekst / ilma', () => {
+  const f = new Function(`${KLEEBIS_JS}; return {kvValik, kvRida, KV};`)();
+  const q = { n: 29, p: 'M0 0h1v1h-1z' };
+  assert.deepEqual(f.kvValik({}), { mastaap: 1, qr: 3, leidja: 'teata', ylal: '', all: '' });
+  for (const m of [1, 0.9, 0.8, 0.7, 0.6]) assert.equal(f.kvValik({ mastaap: m }).mastaap, m);
+  for (const m of [0.5, 0.75, 1.1, 'x']) assert.throws(() => f.kvValik({ mastaap: m }), /100, 90, 80, 70 või 60/);
+  assert.throws(() => f.kvValik({ qr: 7 }), /0–6/); assert.throws(() => f.kvValik({ qr: 1.5 }), /0–6/);
+  assert.throws(() => f.kvValik({ leidja: 'pole', qr: 0 }), /vähemalt üks/);
+  assert.throws(() => f.kvValik({ leidja: 'tekst' }), /tekst/);
+  const t = f.kvValik({ leidja: 'tekst', ylal: 'P.P Ehitusjärelevalve OÜ', all: '<b>5123 4567</b>', qr: 2 });
+  assert.equal(t.ylal, 'P.P EHITUSJÄRELEVALV', 'kuni 20 märki, suurtähed'); assert.equal(t.all, '<B>5123 4567</B>');
+  const r = f.kvRida(q, t);
+  assert.equal(r.length, 3); assert.equal(r[0][0], 26); assert.equal(r[1][0], 19.5);
+  assert.ok(r[0][2].includes('P.P EHITUSJÄRELEVALV') && r[0][2].includes('&lt;B&gt;'), 'tekst on paos');
+  assert.ok(!r[0][2].includes('TEATA LEIUST'));
+  assert.ok(r[0][2].includes('#1C1C1A') && r[0][2].includes('#A33B20'), 'Kindaveli raam');
+  const teata = f.kvRida(q, f.kvValik({ leidja: 'teata', qr: 0 }));
+  assert.equal(teata.length, 1); assert.equal(teata[0][2].split('TEATA LEIUST').length - 1, 4);
+  const v = f.kvRida(q, f.kvValik({ leidja: 'pole', qr: 6, mastaap: 0.6 }));
+  assert.equal(v.length, 6); assert.equal(v[0][0], 11.7);
+});

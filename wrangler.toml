@@ -32,6 +32,12 @@ new_sqlite_classes = ["Register"]
 # binding = "FOTOD"
 # bucket_name = "qrwork-fotod"
 
+# Valikuline: arve/tšeki/andmesildi pildilt lugemine (Workers AI, tasuta kvoot; Margo 10.11.2026). Esimesel korral:
+# Haldus → Seaded → „Nõustun pildimudeli litsentsiga“ (Meta Llama 3.2 Vision). Ilma selle plokita täidab haldur väljad käsitsi.
+# Dokumentide originaalid (foto/PDF) hoitakse samas R2-s nagu fotod (FOTOD).
+[ai]
+binding = "AI"
+
 # Saladused (mitte siia faili!):
 #   npx wrangler secret put ADMIN_TOKEN     (≥ 16 märki, nt openssl rand -base64 32)
 #   npx wrangler secret put TOKEN_SECRET    (≥ 16 märki; IP-räsi sool)
