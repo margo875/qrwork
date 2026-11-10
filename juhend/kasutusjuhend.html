@@ -1,0 +1,430 @@
+<!doctype html>
+<html lang="et">
+<head>
+<meta charset="utf-8">
+<title>K | Krativara – kasutusjuhend</title>
+<style>
+@font-face { font-family: 'Instrument Sans'; font-weight: 400 700; src: url(fondid/instrument-sans-latin.woff2) format('woff2'); unicode-range: U+0000-00FF, U+2000-206F, U+20AC; }
+@font-face { font-family: 'Instrument Sans'; font-weight: 400 700; src: url(fondid/instrument-sans-latin-ext.woff2) format('woff2'); unicode-range: U+0100-02BA, U+02BD-02FF; }
+@font-face { font-family: 'Newsreader'; font-weight: 500; src: url(fondid/newsreader-500-latin.woff2) format('woff2'); unicode-range: U+0000-00FF, U+2000-206F, U+20AC; }
+@font-face { font-family: 'Newsreader'; font-weight: 500; src: url(fondid/newsreader-500-latin-ext.woff2) format('woff2'); unicode-range: U+0100-02BA, U+02BD-02FF; }
+@page { size: 148mm 210mm; margin: 11mm 10mm 12mm; }
+:root { --tint: #1C1C1A; --aktsent: #A33B20; --hall: #5E5B55; --pind: #F0EEE9; --joon: #D9D6CF; }
+* { box-sizing: border-box; }
+body { margin: 0; font: 10.3pt/1.42 'Instrument Sans', Arial, sans-serif; color: var(--tint); background: #FAF9F6; }
+h1, h2, h3 { font-family: 'Newsreader', Georgia, serif; font-weight: 500; line-height: 1.15; margin: 0 0 2.5mm; }
+h1 { font-size: 30pt; }
+h2 { font-size: 16pt; }
+h3 { font-size: 12pt; margin-top: 3mm; break-after: avoid; }
+p { margin: 0 0 2.2mm; }
+ul, ol { margin: 0 0 2.5mm; padding-left: 5mm; }
+li { margin-bottom: 1mm; }
+.leht { break-after: page; }
+.leht:last-child { break-after: auto; }
+.kaas { display: flex; flex-direction: column; justify-content: center; min-height: 184mm; }
+.logo { font: 700 15pt 'Instrument Sans'; margin-bottom: 9mm; display: flex; align-items: center; gap: 2.4mm; }
+.logo b { color: var(--aktsent); }
+.logo i { width: .3mm; height: 6mm; background: var(--joon); }
+.logo span { font: 500 17pt 'Newsreader'; color: var(--aktsent); }
+.alam { color: var(--hall); font-size: 11.5pt; }
+.nr { display: inline-block; min-width: 8.5mm; color: var(--aktsent); font-weight: 700; font-family: 'Instrument Sans'; font-size: 13pt; }
+.rida { display: flex; gap: 5mm; align-items: flex-start; margin-bottom: 2mm; }
+.rida figure { margin: 0; flex: 0 0 37mm; }
+.rida > div { flex: 1; min-width: 0; }
+figure img { width: 100%; border: .3mm solid var(--joon); border-radius: 3mm; display: block; }
+figcaption { font-size: 8pt; color: var(--hall); text-align: center; margin-top: 1mm; }
+.kuvad { display: flex; gap: 4mm; justify-content: center; margin: 2mm 0 3mm; }
+.kuvad figure { margin: 0; width: 38mm; }
+.kuvad.lai figure { width: 100%; }
+.kuvad.lai img { border-radius: 1.5mm; }
+.kast { background: var(--pind); border-left: 1.2mm solid var(--aktsent); padding: 2mm 3mm; border-radius: 1.5mm; margin: 2mm 0 3mm; }
+table { border-collapse: collapse; width: 100%; font-size: 9.3pt; margin: 1mm 0 3mm; break-inside: avoid; }
+th, td { border-bottom: .3mm solid var(--joon); padding: 1.2mm 1.5mm; text-align: left; vertical-align: top; }
+th { font-weight: 700; background: var(--pind); }
+.sisukord { column-count: 2; column-gap: 6mm; font-size: 9.5pt; padding-left: 5mm; }
+.sisukord li { break-inside: avoid; margin-bottom: .6mm; }
+b.nupp { border: .3mm solid var(--tint); border-radius: 1.5mm; padding: 0 1.2mm; font-weight: 600; white-space: nowrap; }
+.olek { display: inline-block; padding: .2mm 1.6mm; border-radius: 1mm; color: #fff; font-size: 8pt; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.oigused { font-size: 7.8pt; color: var(--hall); border-top: .3mm solid var(--joon); padding-top: 2mm; margin-top: 5mm; }
+.kleebis { background: #fff; border: .3mm solid var(--joon); border-radius: 1.5mm; padding: 2mm; text-align: center; margin: 1mm 0 2mm; }
+.kleebis img { width: 100%; border: 0; }
+</style>
+</head>
+<body>
+
+<section class="leht kaas">
+  <div class="logo"><b>K</b><i></i><span>Krativara</span></div>
+  <h1>Krativara</h1>
+  <p class="alam">Tööriistade ja mõõteseadmete register QR-koodiga. Kasutusjuhend töötajale, haldurile ja hooldajale.</p>
+  <p>Igal seadmel on QR-kleebis. Töötaja skännib selle telefoniga, kui võtab seadme kasutusse või toob tagasi. Nii on alati näha, kelle käes seade on, kus see viimati oli, millal tuleb taatlus või hooldus ning mis seadmega on juhtunud.</p>
+  <p>Kui seade kaob ja keegi selle leiab, saab leidja kleebise kaudu omanikule teada anda. Väline hooldusfirma saab samuti kleebise kaudu teha hoolduse sissekanded ja lisada aktid.</p>
+  <p>Rakendust ei pea rakenduste poest otsima ega installima: see töötab telefoni brauseris ja selle saab lisada avaekraanile.</p>
+  <h3>Sisukord</h3>
+  <ol class="sisukord">
+    <li>Alustamine</li>
+    <li>Avaleht ja menüü</li>
+    <li>Seadme võtmine</li>
+    <li>Tagastamine</li>
+    <li>Seadme kaart</li>
+    <li>Broneerimine ja märkus</li>
+    <li>Kus on seade?</li>
+    <li>Kui keegi leiab seadme</li>
+    <li>Haldus: ülevaade ja seadmed</li>
+    <li>Ostuandmed ja dokumendid</li>
+    <li>Taatlus ja korduv hooldus</li>
+    <li>Kleebised ja sildid</li>
+    <li>Välisesse hooldusesse saatmine</li>
+    <li>Juhend hooldajale</li>
+    <li>Õigused ja korduvad küsimused</li>
+  </ol>
+  <p class="oigused">© 2026 Kindavel. Krativara on Kindaveli rakendus. Juhendi ja rakenduse kujunduse kopeerimine ilma Kindaveli loata on keelatud. Pildid on tehtud näidisandmetega.</p>
+</section>
+
+<section class="leht">
+  <h2><span class="nr">1</span>Alustamine</h2>
+  <div class="rida">
+    <figure><img src="kuvad/01_registreeru.jpg" alt=""><figcaption>Töökoha QR avab registreerimise</figcaption></figure>
+    <div>
+      <p>Igas laos ja objektil on <b>töökoha plakat</b> QR-koodiga. Skänni see telefoni kaameraga.</p>
+      <h3>Esimene kord</h3>
+      <ol>
+        <li>Vali <b class="nupp">Uus kasutaja</b>.</li>
+        <li>Sisesta ees- ja perekonnanimi ning telefon.</li>
+        <li>Vali parool (vähemalt 6 märki) ja vajuta <b class="nupp">Registreeru</b>.</li>
+      </ol>
+      <p>Kui ettevõte kinnitab uued kasutajad, saad seadmeid võtta pärast halduri kinnitust. Rakendus ütleb seda avalehel.</p>
+      <p>Telefon jääb sisse logituks. Teises telefonis vali <b class="nupp">Logi sisse</b> ja sisesta telefon ning parool.</p>
+    </div>
+  </div>
+  <h3>Avaekraanile</h3>
+  <p><b>Android (Chrome):</b> lehe allservas <b class="nupp">Lisa avakuvale</b> või brauseri menüüst „Lisa avaekraanile“.<br>
+  <b>iPhone (Safari):</b> Jaga → „Lisa avaekraanile“.</p>
+  <p>Avaekraanil on ikoon <b>K | VARA</b>. Edaspidi ava rakendus sealt.</p>
+  <div class="kast"><b>Parool ununes?</b> Vali sisselogimisel „Unustasid parooli?“ ja küsi haldurilt taastuskood. Kood kehtib 24 tundi.</div>
+</section>
+
+<section class="leht">
+  <h2><span class="nr">2</span>Avaleht ja menüü</h2>
+  <div class="rida">
+    <figure><img src="kuvad/02_avaleht.jpg" alt=""><figcaption>Avaleht</figcaption></figure>
+    <div>
+      <p>Avalehel on kaks põhinuppu: <b class="nupp">Võta seade</b> ja <b class="nupp">Tagasta seade</b>. Nende all on sinu nimel olevad seadmed ja sinu broneeringud.</p>
+      <p>Seadme real on inventarinumber ja aeg, millest alates see on sinu nimel. Vajuta real, et avada seadme kaart.</p>
+      <p>Avalehel näed ka teateid, mis puudutavad sind: näiteks kui sinu käes oleva seadme on keegi järgmisteks päevadeks broneerinud või kui kolleeg võttis sinu nimel oleva seadme üle.</p>
+    </div>
+  </div>
+  <h3>Alumine menüü</h3>
+  <table>
+    <tr><th>Minu</th><td>avaleht: sinu seadmed, broneeringud ja teated</td></tr>
+    <tr><th>Võta</th><td>skänni seade (või mitu järjest) ja võta oma nimele</td></tr>
+    <tr><th>Tagasta</th><td>skänni seade ja tagasta lattu</td></tr>
+    <tr><th>Otsi</th><td>„Kus on seade?“ – kelle käes või millises laos</td></tr>
+  </table>
+  <p>Ülal paremal on töökoht, mille plakatilt viimati sisse tulid. Tagastus seotakse selle töökohaga.</p>
+</section>
+
+<section class="leht">
+  <h2><span class="nr">3</span>Seadme võtmine</h2>
+  <div class="rida">
+    <figure><img src="kuvad/03_vota.jpg" alt=""><figcaption>Kaks seadet järjest</figcaption></figure>
+    <div>
+      <ol>
+        <li>Vajuta <b class="nupp">Võta</b>. Avaneb kaamera.</li>
+        <li>Suuna kaamera seadme QR-kleebisele. Seade lisatakse loendisse.</li>
+        <li>Skänni järgmised seadmed, kui võtad mitu.</li>
+        <li>Vajuta <b class="nupp">Võta (2)</b>.</li>
+      </ol>
+      <p>Iga seadme juures on kohe näha, kas selle saab võtta. Hoiatused, näiteks peatselt aeguv taatlus või kolleegi märkus „tarvik puudu“, ei takista võtmist.</p>
+      <p>Kui kleebis on kulunud, sisesta selle all olev 12-märgiline kood käsitsi.</p>
+    </div>
+  </div>
+  <h3>Seade on veel kolleegi nimel</h3>
+  <p>Kui kolleeg unustas tagastada või andis seadme sulle otse üle, näed tema nime ja telefoni. Seadme saad võtta linnukesega <b>„Võtan seadme üle“</b>. Kolleeg saab teate ja kinnitab, et andis seadme üle. Kui ta seda ei kinnita, läheb küsimus haldurile.</p>
+  <h3>Millal võtta ei saa</h3>
+  <ul>
+    <li>seade on remondis, hoolduses, taatlusel või maha kantud;</li>
+    <li>taatlus või kalibreerimine on aegunud;</li>
+    <li>keegi teine on seadme tänaseks broneerinud (näed tema nime ja telefoni);</li>
+    <li>sinu konto ootab kinnitust või sinu nimel on lubatud arv seadmeid juba olemas.</li>
+  </ul>
+</section>
+
+<section class="leht">
+  <h2><span class="nr">4</span>Tagastamine</h2>
+  <div class="rida">
+    <figure><img src="kuvad/08_tagasta.jpg" alt=""><figcaption>Tagastamine</figcaption></figure>
+    <div>
+      <ol>
+        <li>Vajuta <b class="nupp">Tagasta</b>.</li>
+        <li>Skänni seade või mitu seadet järjest.</li>
+        <li>Soovi korral lisa foto seadmest, näiteks kui midagi on katki.</li>
+        <li>Vajuta <b class="nupp">Tagasta</b>.</li>
+      </ol>
+      <p>Tagastus seotakse töökohaga, kus oled, ja jääb seadme ajalukku koos kuupäeva ja kellaajaga.</p>
+      <p>Tagastada saab seadme see, kelle nimel see on. Kui seade on laos tagasi, aga kolleeg unustas selle registreerida, saad märkida seadme <b>tagastatuks tema eest</b>. Kolleeg kinnitab selle hiljem.</p>
+    </div>
+  </div>
+  <div class="kast">Kui seadmega on midagi valesti, lisa enne tagastamist seadme kaardil <b>märkus</b> (vt 6). Nii näevad seda ka järgmised kasutajad ja haldur.</div>
+</section>
+
+<section class="leht">
+  <h2><span class="nr">5</span>Seadme kaart</h2>
+  <div class="rida">
+    <figure><img src="kuvad/04_seade_minu.jpg" alt=""><figcaption>Seade sinu nimel</figcaption></figure>
+    <div>
+      <p>Kaart avaneb, kui vajutad seadme real või skännid kleebist telefoni kaameraga.</p>
+      <p>Pealkirja all on <b>olek</b>:</p>
+      <table>
+        <tr><td><span class="olek" style="background:#2F6B4F">Vaba</span></td><td>laos, saad võtta</td></tr>
+        <tr><td><span class="olek" style="background:#1C1C1A">Sinu nimel</span></td><td>alates kuupäevast</td></tr>
+        <tr><td><span class="olek" style="background:#8A5300">Kasutuses</span></td><td>kolleegi nimi ja telefon</td></tr>
+        <tr><td><span class="olek" style="background:#B3261E">Ei saa võtta</span></td><td>remondis, taatlusel või maha kantud</td></tr>
+      </table>
+      <p>Edasi on hoiatused (taatlus, hooldus, kolleegide märkused) ja seadme andmed: tüüp, tootja, mudel, inventari- ja seerianumber, taatluse tähtaeg ning järgmine hooldus.</p>
+    </div>
+  </div>
+  <div class="rida">
+    <figure><img src="kuvad/06_seade_teise.jpg" alt=""><figcaption>Kolleegi nimel</figcaption></figure>
+    <div>
+      <p>Kaardil on ka nupud <b class="nupp">Võta</b> või <b class="nupp">Tagasta</b>, broneeringud, märkuse lisamine ja seadme <b>ajalugu</b>: kes, millal ja kus seadme võttis ning tagastas.</p>
+      <p>Registriandmeid (nimi, numbrid, taatlus, olek) muudab ainult haldur. Töötaja saab lisada märkuse.</p>
+    </div>
+  </div>
+</section>
+
+<section class="leht">
+  <h2><span class="nr">6</span>Broneerimine ja märkus</h2>
+  <div class="rida">
+    <figure><img src="kuvad/05_seade_all.jpg" alt=""><figcaption>Seadme kaardi alumine osa</figcaption></figure>
+    <div>
+      <h3 style="margin-top:0">Broneerimine</h3>
+      <p>Vali algus- ja lõppkuupäev, soovi korral märkus (näiteks objekt) ja vajuta <b class="nupp">Broneeri</b>.</p>
+      <ul>
+        <li>Broneerida saab kuni 180 päeva ette, kuni 60 päevaks korraga.</li>
+        <li>Broneeritud päeval saab seadme võtta ainult broneerija.</li>
+        <li>Kui sinu käes oleva seadme on keegi lähipäevadeks broneerinud, näed avalehel hoiatust.</li>
+        <li>Oma broneeringu saad tühistada avalehel.</li>
+      </ul>
+      <h3>Märkus</h3>
+      <p>Vali liik: <i>ei tööta</i>, <i>vajab taatlemist</i>, <i>kahjustatud</i>, <i>tarvik puudu</i> või <i>muu</i>. Lisa täpsustus ja soovi korral foto.</p>
+      <p>Märkus läheb haldurile. Tõsisematest (ei tööta, kahjustatud, vajab taatlemist) saab haldur kohe teate. Teised kasutajad näevad märkust enne võtmist, kuni haldur selle lahendab.</p>
+    </div>
+  </div>
+</section>
+
+<section class="leht">
+  <h2><span class="nr">7</span>Kus on seade?</h2>
+  <div class="rida">
+    <figure><img src="kuvad/07_otsing.jpg" alt=""><figcaption>Otsing</figcaption></figure>
+    <div>
+      <p>Vajuta <b class="nupp">Otsi</b> ja kirjuta vähemalt kaks tähte seadme nimest, tüübist või inventarinumbrist. Võid ka skännida QR-koodi.</p>
+      <p>Iga tulemuse juures on näha:</p>
+      <ul>
+        <li>kelle käes seade on (nimi ja telefon, saad kohe helistada) ja alates millal;</li>
+        <li>või millises laos see on vaba;</li>
+        <li>hoiatused, näiteks taatluse tähtaeg.</li>
+      </ul>
+      <p>Valitud töötajatel (superkasutajad, näiteks laojuhataja) on lisaks vaade <b>Laod ja seis</b>: iga lao seadmed ja see, mis on parajasti kasutuses.</p>
+    </div>
+  </div>
+</section>
+
+<section class="leht">
+  <h2><span class="nr">8</span>Kui keegi leiab seadme</h2>
+  <div class="rida">
+    <figure><img src="kuvad/09_leidja.jpg" alt=""><figcaption>Leidja näeb seda lehte</figcaption></figure>
+    <div>
+      <p>Kui kõrvaline inimene skännib seadme kleebist, näeb ta ainult ettevõtte nime ja seadme nime. Töötajate nimesid, telefone ega registri andmeid ta ei näe.</p>
+      <p>Leidja saab:</p>
+      <ul>
+        <li>kirjutada, kus seade on;</li>
+        <li>jätta oma kontakti (valikuline);</li>
+        <li>lisada foto;</li>
+        <li>helistada ettevõtte kontaktnumbrile.</li>
+      </ul>
+      <p>Haldur saab teate kohe, koos ligikaudse asukoha ja selle inimese nimega, kelle nimel seade oli.</p>
+      <p>Haldur saab teate ka siis, kui kleebist lihtsalt skänniti. Nii märkab ta, kui seade on liikunud kuhugi, kus see olla ei tohiks.</p>
+    </div>
+  </div>
+</section>
+
+<section class="leht">
+  <h2><span class="nr">9</span>Haldus: ülevaade ja seadmed</h2>
+  <div class="rida">
+    <figure><img src="kuvad/12_haldus.jpg" alt=""><figcaption>Haldus, ülevaade</figcaption></figure>
+    <div>
+      <p>Halduse leht on ettevõtte halduri jaoks (eraldi võti). Vahekaartidel on punane number, kui seal on midagi üle vaadata.</p>
+      <table>
+        <tr><th>Ülevaade</th><td>märkused, vaidlused, kinnitust ootavad kasutajad, aeguv taatlus, mis on praegu kasutuses</td></tr>
+        <tr><th>Seadmed</th><td>lisamine ja muutmine, sildid, kleebised, kataloog, eeltrükitud koodid</td></tr>
+        <tr><th>Hooldus</th><td>hooldusfirmad ja töökäsud</td></tr>
+        <tr><th>Broneeringud</th><td>kõik broneeringud, tühistamine</td></tr>
+        <tr><th>Töökohad</th><td>laod ja objektid, A4 plakat QR-iga</td></tr>
+        <tr><th>Kasutajad</th><td>kinnitamine, peatamine, taastuskood, superkasutaja</td></tr>
+        <tr><th>Logi</th><td>kõik sündmused, väljavõte tabelina</td></tr>
+        <tr><th>Seaded</th><td>ettevõtte nimi, teavitused, limiidid, kalendri link</td></tr>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section class="leht">
+  <h2><span class="nr">9</span>Seadme lisamine</h2>
+  <div class="rida">
+    <figure><img src="kuvad/13_seadmed.jpg" alt=""><figcaption>Seadme lisamine</figcaption></figure>
+    <div>
+      <p>Seadmed → <b class="nupp">Lisa seade</b>. Kohustuslik on ainult nimi. Inventarinumber tekib ise (näiteks <b>L1-2611001</b> = ladu L1, 2026 november, esimene seade), soovi korral sisesta oma.</p>
+      <p>Kui kleebised on juba trükitud, vajuta välja „Kood“ juures <b class="nupp">Skänni</b> ja skänni kleebis. Seade seotakse selle koodiga.</p>
+      <p>Seadme juurde saab lisada tüübi, tootja, mudeli, seerianumbri, koduladu, taatluse tähtaja ja lisainfo, mida näevad kõik kasutajad.</p>
+      <p>Kustutatud seadme saab 30 päeva jooksul taastada. Kellegi nimel olevat seadet kustutada ei saa.</p>
+      <h3>Töökohad ja kasutajad</h3>
+      <p>Töökohad → lisa ladu või objekt ja prindi <b>A4 plakat</b> QR-koodiga. Vali, kas uued kasutajad saavad kohe alustada või ootavad sinu kinnitust.</p>
+      <p>Kasutajad → kinnita, peata või anna parooli taastuskood. Superkasutaja (näiteks laojuhataja) näeb kõiki seadmeid ja ladude seisu.</p>
+    </div>
+  </div>
+</section>
+
+<section class="leht">
+  <h2><span class="nr">10</span>Ostuandmed ja dokumendid</h2>
+  <div class="rida">
+    <figure><img src="kuvad/14_dokumendid.jpg" alt=""><figcaption>Arve pildistamine</figcaption></figure>
+    <div>
+      <p>Seadme juures saab hoida ostu andmeid: ostukuupäev, hind, müüja ja garantii lõpp. Neid näeb ainult haldur.</p>
+      <h3>Arve, tšekk või andmesilt</h3>
+      <ol>
+        <li>Vali dokumendi liik (arve, tšekk, andmesilt, garantii, kasutusjuhend, muu).</li>
+        <li>Vajuta <b class="nupp">Pildista</b> või <b class="nupp">Vali fail</b> (foto või PDF).</li>
+        <li>Rakendus loeb fotolt nime, tootja, mudeli, seerianumbri, hinna, müüja ja kuupäevad ning täidab tühjad väljad.</li>
+        <li>Kui fotol on midagi muud kui väljal, näed seda eraldi ja saad valida <b class="nupp">Kasuta</b>.</li>
+        <li>Kontrolli andmed üle ja vajuta <b class="nupp">Salvesta</b>.</li>
+      </ol>
+      <p>Originaalfail jääb seadme juurde ja seda saab hiljem avada. Andmesildilt loetakse tootja, mudel, seerianumber ja valmistamise aasta.</p>
+    </div>
+  </div>
+</section>
+
+<section class="leht">
+  <h2><span class="nr">11</span>Taatlus ja korduv hooldus</h2>
+  <div class="rida">
+    <figure><img src="kuvad/15_hooldusplaan.jpg" alt=""><figcaption>Hooldusplaan</figcaption></figure>
+    <div>
+      <h3 style="margin-top:0">Taatlus ja kalibreerimine</h3>
+      <p>Seadmel on taatluse tähtaeg ja intervall kuudes. <b class="nupp">Registreeri taatlus</b> (kuupäev, tunnistuse number, labor, tulemus) arvutab järgmise tähtaja. Aegunud taatlusega seadet võtta ei saa.</p>
+      <h3>Korduv hooldus</h3>
+      <p>Lisa seadmele hooldusplaan, näiteks:</p>
+      <ul>
+        <li>hooldus 1× aastas;</li>
+        <li>filtrite vahetus 2× aastas;</li>
+        <li>kontroll 1× 2 aasta jooksul.</li>
+      </ul>
+      <p>Iga plaani juures on viimane ja järgmine kuupäev ning meeldetuletus (vaikimisi 14 päeva enne). Kui hooldus läheneb või on üle tähtaja, näevad seda kõik seadme kaardil. Võtmist see ei takista.</p>
+      <p><b class="nupp">Tehtud</b> küsib kuupäeva, kulu, tegijat ja märkust ning arvutab järgmise tähtaja.</p>
+    </div>
+  </div>
+  <div class="kast"><b>Kalender:</b> Seaded → „Loo kalendri link“. Lisa link Outlooki, Google'i või telefoni kalendrisse ja taatluse tähtajad, hooldused ning broneeringud ilmuvad sinna koos meeldetuletustega.</div>
+</section>
+
+<section class="leht">
+  <h2><span class="nr">12</span>Kleebised ja sildid</h2>
+  <div class="rida">
+    <figure><img src="kuvad/16_kleebised.jpg" alt=""><figcaption>Kleebiste valikud</figcaption></figure>
+    <div>
+      <p>Seadmed → vali seadmed → <b class="nupp">Kleebised</b>. Iga seadme kohta tuleb üks rida.</p>
+      <table>
+        <tr><th>Suurus</th><td>100, 90, 80, 70 või 60 % (QR 19,5 kuni 11,7 mm)</td></tr>
+        <tr><th>Sama koodiga QR-e</th><td>0–6, ilma tekstita: seadme eri külgedele, kohvrile, laadijale</td></tr>
+        <tr><th>Leidja kleebis</th><td>„TEATA LEIUST“ neljal küljel, oma tekst üleval ja all (kuni 20 märki, näiteks ettevõtte nimi ja telefon) või ilma</td></tr>
+      </table>
+      <p>Eelvaade on kohe näha. <b class="nupp">Prindi</b> või laadi alla SVG trükikojale.</p>
+    </div>
+  </div>
+  <div class="kleebis"><img src="kuvad/18_kleebiserida.jpg" alt=""></div>
+  <div class="kleebis"><img src="kuvad/18b_kleebiserida_tekst.jpg" alt=""></div>
+  <p>Prindi 100 % suuruses, ilma „sobita lehele“ valikuta. Väiksemate (60–70 %) kleebiste puhul proovi enne skännimist oma telefonidega.</p>
+  <p><b>Sildid</b> (32 × 44 mm) on nime ja inventarinumbriga sildid seadmele. <b>Eeltrükitud koodid</b>: prindi korraga näiteks 200 kleebist ja seo need seadmetega lisamise käigus.</p>
+</section>
+
+<section class="leht">
+  <h2><span class="nr">13</span>Välisesse hooldusesse saatmine</h2>
+  <p>Kui seade läheb remonti, kalibreerimisse või hooldusesse väljaspool ettevõtet, teeb hooldusfirma oma sissekanded otse seadme juurde.</p>
+  <ol>
+    <li><b>Hooldaja lisamine</b> (Hooldus → Lisa hooldaja): ettevõte, registrikood, KMKR, aadress, kontaktisik, telefon, e-post ja arve e-post. Seadmele saab määrata vaikimisi hooldaja.</li>
+    <li><b>Saada hooldusesse</b> (seadme juures): vali hooldaja, kirjuta töö või rikke kirjeldus ja kehtivus (vaikimisi 30 päeva). Seade läheb olekusse „remondis“.</li>
+    <li><b class="nupp">Prindi töökäsk</b>. Esimene leht on tellimus koos hoolduse QR-koodiga ja käib koos seadmega. Teisel lehel on 8-kohaline PIN: anna see hooldajale eraldi (käest kätte, SMS-i või e-kirjaga).</li>
+  </ol>
+  <div class="kuvad lai"><figure><img src="kuvad/19_tookask.jpg" alt=""><figcaption>Töökäsk (tellimus) hoolduse QR-koodiga</figcaption></figure></div>
+</section>
+
+<section class="leht">
+  <h2><span class="nr">13</span>Välisesse hooldusesse saatmine (järg)</h2>
+  <div class="rida">
+    <figure><img src="kuvad/17_tookask_haldus.jpg" alt=""><figcaption>Töökäsk halduses</figcaption></figure>
+    <div>
+      <p>Hoolduse vahekaardil näed kõiki töökäske ja nende olekut. Kui hooldaja märgib töö tehtuks, saad teate ja vahekaardil on punane number.</p>
+      <p>Töökäsu juures on hooldaja sissekanded, summad ja failid. Kui hooldaja on midagi parandanud või eemaldanud, näed ka eelmist versiooni.</p>
+      <h3>Kinnita ja sulge</h3>
+      <p>Vali seadme olek pärast hooldust (kasutusel, remondis või maha kantud) ja hooldusplaan, mis sai tehtud. Sissekanded ja summa lähevad seadme hooldusajalukku ning hooldaja ligipääs lõpeb.</p>
+      <h3>Muud võimalused</h3>
+      <ul>
+        <li><b>Uus PIN ja link</b>: vana PIN ja töökäsu QR lakkavad kohe töötamast.</li>
+        <li><b>Tühista töökäsk</b>.</li>
+        <li><b>Ava uuesti</b>: 14 päeva jooksul pärast sulgemist, kui töökäsk suleti ekslikult või töö jätkub. Sissekanded jäävad alles, luuakse uus PIN ja QR.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="leht">
+  <h2><span class="nr">14</span>Juhend hooldajale</h2>
+  <div class="rida">
+    <figure><img src="kuvad/10_leidja_pin.jpg" alt=""><figcaption>Sisenemine PIN-iga</figcaption></figure>
+    <div>
+      <p>Sisenemiseks on kaks võimalust:</p>
+      <ul>
+        <li>skänni töökäsul olev hoolduse QR telefoni kaameraga;</li>
+        <li>või skänni seadme kleebist ja sisesta lahtrisse „Hooldaja?“ 8-kohaline PIN.</li>
+      </ul>
+      <p>Telefon jääb töökäsuga seotuks 12 tunniks. Hiljem sisene uuesti samal viisil.</p>
+      <p>Hooldaja näeb ainult selle seadme tehnilisi andmeid ja tellimuse kirjeldust.</p>
+    </div>
+  </div>
+  <div class="rida">
+    <figure><img src="kuvad/11_hooldaja.jpg" alt=""><figcaption>Hoolduse vaade</figcaption></figure>
+    <div>
+      <h3 style="margin-top:0">Sissekanded</h3>
+      <p>Liigid: vastuvõtt, tehtud töö, osad ja materjal, akt või tunnistus, kooskõlastus, muu. Summa (km-ta) on valikuline.</p>
+      <p>Alusta <b>vastuvõtust</b>: seisukord ja tarvikud.</p>
+      <h3>Fotod ja dokumendid</h3>
+      <p>Pildista või lisa fail (foto või PDF, kuni 10 MB): akt, arve, tunnistus.</p>
+      <h3>Töö tulemus</h3>
+      <p>Vali <i>valmis, võib tagastada</i>, <i>ei ole parandatav</i> või <i>vajab kooskõlastust</i> ja vajuta <b class="nupp">Märgi tehtuks</b>.</p>
+      <p>Kuni omanik töö kinnitab, saad sissekandeid ja faile <b>muuta ja eemaldada</b>.</p>
+    </div>
+  </div>
+</section>
+
+<section class="leht">
+  <h2><span class="nr">15</span>Õigused ja korduvad küsimused</h2>
+  <table>
+    <tr><th></th><th>Töötaja</th><th>Superkasutaja</th><th>Haldur</th><th>Hooldaja</th><th>Leidja</th></tr>
+    <tr><td>Võtta ja tagastada</td><td>✓</td><td>✓</td><td>✓</td><td></td><td></td></tr>
+    <tr><td>Seadme kaart ja ajalugu</td><td>✓</td><td>✓</td><td>✓</td><td>ainult tema töö</td><td></td></tr>
+    <tr><td>Otsing</td><td>✓</td><td>✓ + laod</td><td>✓</td><td></td><td></td></tr>
+    <tr><td>Märkus, broneering</td><td>✓</td><td>✓</td><td>✓</td><td></td><td></td></tr>
+    <tr><td>Registriandmed, kleebised</td><td></td><td></td><td>✓</td><td></td><td></td></tr>
+    <tr><td>Hinnad ja ostudokumendid</td><td></td><td></td><td>✓</td><td></td><td></td></tr>
+    <tr><td>Hoolduse sissekanded</td><td></td><td></td><td>kinnitab</td><td>✓</td><td></td></tr>
+    <tr><td>Leiuteade</td><td></td><td></td><td>saab teate</td><td></td><td>✓</td></tr>
+  </table>
+  <h3>Korduvad küsimused</h3>
+  <p><b>Kaamera ei avane.</b> Luba brauseris kaamera kasutamine või sisesta kleebise kood käsitsi.</p>
+  <p><b>Kleebis ei loe.</b> Puhasta kleebis ja hoia telefoni 15–25 cm kaugusel. Vajadusel prindi uus sama koodiga kleebis.</p>
+  <p><b>Unustasin tagastada.</b> Kolleeg saab seadme üle võtta või märkida selle sinu eest tagastatuks. Kinnita teade avalehel.</p>
+  <p><b>Seade on minu nimel, aga see pole minu käes.</b> Vasta avalehe teatele „Ei, vaidlustan“ ja kirjuta põhjus. Küsimus läheb haldurile.</p>
+  <p><b>Uus telefon.</b> Ava töökoha plakatilt rakendus ja vali „Logi sisse“.</p>
+  <p><b>Rakendus teatab uuest versioonist.</b> Vajuta „Värskenda“.</p>
+  <p class="oigused">© 2026 Kindavel · K | Krativara</p>
+</section>
+
+</body>
+</html>
