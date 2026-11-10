@@ -182,7 +182,7 @@ test('leidja leht: üks privaatsuslause, automaatne asukoht, loendurid, Helista 
   const { env, s } = await alus();
   const r = await worker.fetch(new Request(`https://t.ee/S/${s.kood}`), env, {});
   const h = await r.text();
-  assert.equal(h.split('🔒').length - 1, 1);
+  assert.equal(h.split('Sinu nime ega kontaktandmeid').length - 1, 1, 'üks privaatsuslause (lukuikooniga)');
   assert.match(h, /Sinu nime ega kontaktandmeid ei saadeta, kui sa neid vormi ei lisa\./);
   assert.match(h, /watchPosition/); assert.match(h, /sendBeacon/); assert.match(h, /Saadetud\. Aitäh!/);
   assert.match(h, /maxlength="400"/); assert.match(h, /maxlength="100"/); assert.match(h, /Saada omanikule/);

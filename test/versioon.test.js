@@ -76,3 +76,23 @@ test('vealogi: serveri erind logitakse, vanemad kui 30 p kustuvad', async () => 
   const vead = [...storage.m.entries()].filter(([k]) => k.startsWith('viga:')).map(([, v]) => [v.liik, v.teade, v.leht]);
   assert.deepEqual(vead.map((v) => v[2]).sort(), ['/api/kalender/…', '/api/mina']);
 });
+
+test('kujundus (Kindaveli B nagu K | KODU): fondid serveeritakse, CSP lubab ainult oma fondid, päis ja menüü', async () => {
+  const { env } = keskkond();
+  for (const f of ['instrument-sans-latin', 'instrument-sans-latin-ext', 'newsreader-500-latin', 'newsreader-500-latin-ext']) {
+    const r = await get(env, `/fondid/${f}.woff2`);
+    assert.equal(r.status, 200, f); assert.equal(r.headers.get('Content-Type'), 'font/woff2');
+    const b = new Uint8Array(await r.arrayBuffer());
+    assert.equal(String.fromCharCode(...b.slice(0, 4)), 'wOF2', f);
+  }
+  assert.equal((await get(env, '/fondid/../worker.js')).status, 404);
+  assert.equal((await get(env, '/fondid/puudub.woff2')).status, 404);
+  const leht = await get(env, '/');
+  assert.match(leht.headers.get('Content-Security-Policy'), /font-src 'self'/);
+  const h = await leht.text();
+  assert.ok(h.includes('class="riba"') && h.includes('krativara</span>'), 'päis K Kindavel | krativara');
+  assert.ok(h.includes('id="menyy"'), 'alumine menüü');
+  assert.ok(h.includes('--aktsent:#A33B20') && h.includes('prefers-color-scheme:dark'), 'palett ja tume teema');
+  const mj = JSON.parse(await (await get(env, '/manifest.webmanifest')).text());
+  assert.equal(mj.theme_color, '#FAF9F6');
+});
