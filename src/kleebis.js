@@ -63,7 +63,7 @@ function kleebisSvg(q,id,v,ilma){
 }
 // ---------- Kindaveli kleebised valikutega (Margo 10.11.2026; kujundus K | KODU „B“: margo875/qrkodu avalik/kleebised.js) ----------
 // Valikud: sama koodiga QR-ide arv 0–6, suurus 100/90/80/70/60 %, leidja kleebis: „TEATA LEIUST“ neljal küljel /
-// oma tekst kahel küljel (üleval ja all, kumbki kuni 20 märki, nt firma nimi) / ilma. Leidja raam: tume ümbris #1C1C1A,
+// oma tekst üleval ja all (kumbki kuni 20 märki, nt firma nimi), „TEATA LEIUST“ vasakul ja paremal / ilma. Leidja raam: tume ümbris #1C1C1A,
 // tellisepunased nurgad #A33B20, valge kiri Instrument Sans Bold 7 pt, välisraadius 1,5 mm. 100 %: leidja 26 mm, QR 19,5 mm
 // (koos 4 mooduli vaikse äärega). Lõikejoon 60 % hall 0,1 mm. Ühik 1 mm.
 var KV={L:26,Q:19.5,R:1.5,fs:7*25.4/72,mastaabid:[1,0.9,0.8,0.7,0.6],qrMax:6,tekstMax:20,umbris:'#1C1C1A',nurk:'#A33B20',loige:'#999999'};
@@ -93,7 +93,8 @@ function kvLeidja(q,valik){
     +'<path transform="translate('+r(B+4*m)+' '+r(B+4*m)+') scale('+m.toFixed(5)+')" d="'+q.p+'" fill="'+KV.umbris+'" shape-rendering="crispEdges"/>';
   var tk=B/2;
   if(valik.leidja==='teata'){var t='TEATA LEIUST';g+=kvKiri(t,H,tk,0,maxL)+kvKiri(t,S-tk,H,90,maxL)+kvKiri(t,H,S-tk,0,maxL)+kvKiri(t,tk,H,-90,maxL);}
-  else{if(valik.ylal)g+=kvKiri(valik.ylal,H,tk,0,maxL);if(valik.all)g+=kvKiri(valik.all,H,S-tk,0,maxL);}
+  else{var tl='TEATA LEIUST';g+=kvKiri(tl,S-tk,H,90,maxL)+kvKiri(tl,tk,H,-90,maxL); // Margo 10.11.2026: külgedel jääb „TEATA LEIUST“
+    if(valik.ylal)g+=kvKiri(valik.ylal,H,tk,0,maxL);if(valik.all)g+=kvKiri(valik.all,H,S-tk,0,maxL);}
   // nurgad: ülemised kaldu („katus“), alumised täisnurk, 1 mm servast (nagu K | KODU B-kleebisel)
   var p='M'+o+' '+r(o+1.6)+'V'+r(o+0.7)+'L'+r(o+1.4)+' '+o+'M'+r(S-o)+' '+r(o+1.6)+'V'+r(o+0.7)+'L'+r(S-o-1.4)+' '+o
     +'M'+o+' '+r(S-o-1.4)+'V'+r(S-o)+'H'+r(o+1.4)+'M'+r(S-o)+' '+r(S-o-1.4)+'V'+r(S-o)+'H'+r(S-o-1.4);

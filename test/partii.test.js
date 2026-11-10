@@ -110,7 +110,8 @@ test('kleebised valikutega (Margo 10.11.2026): suurus 100–60 %, QR-ide arv, le
   const r = f.kvRida(q, t);
   assert.equal(r.length, 3); assert.equal(r[0][0], 26); assert.equal(r[1][0], 19.5);
   assert.ok(r[0][2].includes('P.P EHITUSJÄRELEVALV') && r[0][2].includes('&lt;B&gt;'), 'tekst on paos');
-  assert.ok(!r[0][2].includes('TEATA LEIUST'));
+  assert.equal(r[0][2].split('TEATA LEIUST').length - 1, 2, 'oma tekst üleval ja all, TEATA LEIUST kahel küljel');
+  assert.equal((r[0][2].match(/rotate\(0\)/g) || []).length, 2); assert.equal((r[0][2].match(/rotate\(-?90\)/g) || []).length, 2);
   assert.ok(r[0][2].includes('#1C1C1A') && r[0][2].includes('#A33B20'), 'Kindaveli raam');
   const teata = f.kvRida(q, f.kvValik({ leidja: 'teata', qr: 0 }));
   assert.equal(teata.length, 1); assert.equal(teata[0][2].split('TEATA LEIUST').length - 1, 4);
