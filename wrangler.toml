@@ -44,3 +44,21 @@ binding = "AI"
 #   valikuline: DEV_TOKEN       (≥ 16 märki; arendaja vealogi lehel /dev)
 #   valikuline: TG_BOT_TOKEN + TG_CHAT_ID (Telegram), NTFY_TOPIC (+ NTFY_TOKEN, NTFY_URL), OMANIKU_TELEFON (+3725…, „Helista omanikule“)
 #   valikuline: PBKDF2_ITER (10000–100000, vaikimisi 100000; vt README „Parool ja CPU“)
+
+# ---------- Prooviversioon (Margo 10.11.2026): ilma domeenita, aadress qrwork-proov.<konto>.workers.dev ----------
+# Oma andmed (eraldi Durable Object), ei sega päris versiooni. Käivitamine: vt PROOV.md (npx wrangler deploy --env proov).
+[env.proov]
+name = "qrwork-proov"
+workers_dev = true
+routes = []
+[env.proov.ai]
+binding = "AI"
+[[env.proov.durable_objects.bindings]]
+name = "REGISTER"
+class_name = "Register"
+[env.proov.version_metadata]
+binding = "CF_VERSION"
+# Fotode ja dokumentide proovimiseks: loo R2 bucket „qrwork-proov-fotod“ ja eemalda kolme järgmise rea eest #
+# [[env.proov.r2_buckets]]
+# binding = "FOTOD"
+# bucket_name = "qrwork-proov-fotod"
