@@ -89,7 +89,7 @@ main{max-width:640px;margin:0 auto;padding:16px 16px 32px}
 h1,h2{font-family:var(--seriif);font-weight:500;letter-spacing:-.01em}h1{font-size:30px;line-height:1.15;margin:8px 0 6px}h2{font-size:21px;margin:26px 0 10px}
 .riba{position:sticky;top:0;z-index:5;display:flex;gap:10px;align-items:center;padding:calc(12px + env(safe-area-inset-top)) 16px 12px;background:var(--hele);border-bottom:1px solid var(--joon)}
 .riba .nimi{display:flex;align-items:baseline;gap:10px;flex:1;font:700 21px/1 var(--sans);letter-spacing:-.02em;color:var(--tume);text-decoration:none}
-.riba .mark::before{content:'K';margin-right:6px;color:var(--aktsent)}
+.riba .mark::before{content:'K';color:var(--aktsent)}
 .riba .alam{font:500 22px/1 var(--seriif);color:var(--aktsent);padding-left:10px;border-left:1px solid var(--joon);letter-spacing:0}
 .riba .roll{max-width:45%;font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--nork);text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .alapealkiri{color:var(--nork);margin:0 0 16px}
@@ -145,8 +145,8 @@ body.menyyga main{padding-bottom:calc(96px + env(safe-area-inset-bottom))}body.m
 .keskel{text-align:center}input[type=search]::-webkit-search-cancel-button{filter:grayscale(1)}
 @media (max-width:700px){table{display:block;overflow-x:auto}}`;
 
-// Päis nagu K | KODU („K Kindavel | kodu“): siin „K Kindavel | krativara“, paremal töökoht või firma
-const RIBA = `<header class="riba"><a href="/" class="nimi" aria-label="Krativara, avalehele"><span class="mark">Kindavel</span><span class="alam">krativara</span></a><span id="roll" class="roll"></span></header>`;
+// Päis „K | Krativara“ (Margo 10.11.2026; sama nimi on PWA-l), paremal töökoht või firma
+const RIBA = `<header class="riba"><a href="/" class="nimi" aria-label="K | Krativara, avalehele"><span class="mark"></span><span class="alam">Krativara</span></a><span id="roll" class="roll"></span></header>`;
 
 // Kõigil lehtedel: tehniline vealogi (ainult arendajale, /dev), „uus versioon“ riba, jalus versiooniga ja avakuvale lisamine.
 // Vealogisse ei saadeta kasutaja andmeid: ainult veateade, fail/rida, lehe tee (ilma päringuta), versioon, brauser.
@@ -179,7 +179,7 @@ jalus();
 
 export function appLeht(nonce, { seade = '', koht = '', info = '', ver } = {}) {
   return `<!doctype html><html lang="et"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex"><title>Krativara</title><link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#FAF9F6" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#1C1916" media="(prefers-color-scheme: dark)"><link rel="preload" href="/fondid/instrument-sans-latin.woff2" as="font" type="font/woff2" crossorigin><link rel="apple-touch-icon" href="/apple-touch-icon.png"><style>${STIIL}</style></head>
+<meta name="robots" content="noindex"><title>K | Krativara</title><meta name="apple-mobile-web-app-title" content="K | Krativara"><meta name="application-name" content="K | Krativara"><link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#FAF9F6" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#1C1916" media="(prefers-color-scheme: dark)"><link rel="preload" href="/fondid/instrument-sans-latin.woff2" as="font" type="font/woff2" crossorigin><link rel="apple-touch-icon" href="/apple-touch-icon.png"><style>${STIIL}</style></head>
 <body>${RIBA}<main id="sisu"><p class="vaike">Laen…</p></main><nav class="menyy" id="menyy" aria-label="Põhimenüü" hidden></nav>
 <script nonce="${nonce}">
 ${ABI}
@@ -551,7 +551,7 @@ main{max-width:1100px}table{border-collapse:collapse;width:100%;background:var(-
  .silt svg{width:28mm;height:28mm;display:block;margin:0 auto}
  .krida{display:flex;gap:2mm;align-items:flex-start;margin:0 0 1.8mm;break-inside:avoid}.krida svg{display:block;flex:0 0 auto}.silt .k{font:2.2mm monospace}
  .plakat{text-align:center;font-family:Arial,sans-serif;page-break-after:always}.plakat svg{width:120mm;height:120mm}.plakat h1{font-size:12mm;margin:6mm 0 2mm}.plakat h2{font-size:9mm;margin:0 0 6mm}.plakat ol{text-align:left;font-size:5.5mm;max-width:160mm;margin:6mm auto}}
-</style></head><body>${RIBA.replace('krativara</span>','krativara</span><span class="roll" style="margin-left:4px">haldus</span>')}<main id="m"><h1>Haldus</h1>
+</style></head><body>${RIBA.replace('Krativara</span>','Krativara</span><span class="roll" style="margin-left:4px">haldus</span>')}<main id="m"><h1>Haldus</h1>
 <div id="login" class="kaart"><label>Halduse võti (ADMIN_TOKEN)</label><input id="tok" type="password" autocomplete="current-password">
 <label class="mark"><input type="checkbox" id="mal"><span>Jäta selles brauseris meelde</span></label><button class="sin" id="sisse">Ava</button><div id="lviga"></div></div>
 <div id="app" hidden><div class="tabs" id="tabs"></div><div id="sisu"></div></div></main><div id="print"></div>

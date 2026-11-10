@@ -29,7 +29,7 @@ export function ipKohtTekst(cf = {}) {
 // Versioon: VERSIOON (käsitsi, src/versioon.js) + deploy'i id (CF_VERSION, wrangler.toml [version_metadata]; muutub iga deploy'ga)
 export const versioon = (env) => ({ v: VERSIOON, id: String(env.CF_VERSION?.id || '').slice(0, 8) });
 const MANIFEST = JSON.stringify({
-  name: 'Krativara', short_name: 'Krativara', lang: 'et', start_url: '/', scope: '/', display: 'standalone',
+  name: 'K | Krativara', short_name: 'K | Krativara', lang: 'et', start_url: '/', scope: '/', display: 'standalone',
   background_color: '#FAF9F6', theme_color: '#FAF9F6',
   icons: ['any', 'maskable'].flatMap((purpose) => [{ src: '/ikoon-192.png', sizes: '192x192', type: 'image/png', purpose }, { src: '/ikoon-512.png', sizes: '512x512', type: 'image/png', purpose }]),
 });

@@ -13,7 +13,7 @@ test('versioon: API ja lehed näitavad sama versiooni, deploy id kaasa', async (
   assert.deepEqual(j, { v: VERSIOON, id: 'abcdef12' });
   const h = await (await get(env, '/')).text();
   assert.ok(h.includes(JSON.stringify(j)), 'leht teab oma versiooni');
-  assert.ok(h.includes('<title>Krativara</title>'));
+  assert.ok(h.includes('<title>K | Krativara</title>'));
   assert.ok((await (await get(env, '/admin')).text()).includes('Krativara haldus'));
 });
 
@@ -21,7 +21,7 @@ test('PWA: manifest, ikoonid, CSP lubab manifesti', async () => {
   const { env } = keskkond();
   const m = await get(env, '/manifest.webmanifest');
   const mj = JSON.parse(await m.text());
-  assert.equal(mj.name, 'Krativara'); assert.equal(mj.display, 'standalone');
+  assert.equal(mj.name, 'K | Krativara'); assert.equal(mj.short_name, 'K | Krativara'); assert.equal(mj.display, 'standalone');
   for (const i of mj.icons) {
     const r = await get(env, i.src);
     assert.equal(r.headers.get('Content-Type'), 'image/png');
@@ -90,7 +90,7 @@ test('kujundus (Kindaveli B nagu K | KODU): fondid serveeritakse, CSP lubab ainu
   const leht = await get(env, '/');
   assert.match(leht.headers.get('Content-Security-Policy'), /font-src 'self'/);
   const h = await leht.text();
-  assert.ok(h.includes('class="riba"') && h.includes('krativara</span>'), 'päis K Kindavel | krativara');
+  assert.ok(h.includes('class="riba"') && h.includes('Krativara</span>'), 'päis K | Krativara');
   assert.ok(h.includes('id="menyy"'), 'alumine menüü');
   assert.ok(h.includes('--aktsent:#A33B20') && h.includes('prefers-color-scheme:dark'), 'palett ja tume teema');
   const mj = JSON.parse(await (await get(env, '/manifest.webmanifest')).text());
