@@ -21,7 +21,7 @@ test('PWA: manifest, ikoonid, CSP lubab manifesti', async () => {
   const { env } = keskkond();
   const m = await get(env, '/manifest.webmanifest');
   const mj = JSON.parse(await m.text());
-  assert.equal(mj.name, 'K | Krativara'); assert.equal(mj.short_name, 'K | Krativara'); assert.equal(mj.display, 'standalone');
+  assert.equal(mj.name, 'K | Krativara'); assert.equal(mj.short_name, 'K | VARA'); assert.equal(mj.display, 'standalone');
   for (const i of mj.icons) {
     const r = await get(env, i.src);
     assert.equal(r.headers.get('Content-Type'), 'image/png');
@@ -31,7 +31,9 @@ test('PWA: manifest, ikoonid, CSP lubab manifesti', async () => {
   assert.equal((await get(env, '/apple-touch-icon.png')).status, 200);
   const leht = await get(env, '/');
   assert.match(leht.headers.get('Content-Security-Policy'), /manifest-src 'self'/);
-  assert.ok((await leht.text()).includes('rel="manifest"'));
+  const lh = await leht.text();
+  assert.ok(lh.includes('rel="manifest"'));
+  assert.ok(lh.includes('apple-mobile-web-app-title" content="K | VARA"'), 'iPhone avakuva nimi');
 });
 
 test('vealogi: klient saab kirjutada, ainult DEV_TOKEN loeb; haldur ei loe', async () => {

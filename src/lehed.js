@@ -179,7 +179,7 @@ jalus();
 
 export function appLeht(nonce, { seade = '', koht = '', info = '', ver } = {}) {
   return `<!doctype html><html lang="et"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex"><title>K | Krativara</title><meta name="apple-mobile-web-app-title" content="K | Krativara"><meta name="application-name" content="K | Krativara"><link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#FAF9F6" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#1C1916" media="(prefers-color-scheme: dark)"><link rel="preload" href="/fondid/instrument-sans-latin.woff2" as="font" type="font/woff2" crossorigin><link rel="apple-touch-icon" href="/apple-touch-icon.png"><style>${STIIL}</style></head>
+<meta name="robots" content="noindex"><title>K | Krativara</title><meta name="apple-mobile-web-app-title" content="K | VARA"><meta name="application-name" content="K | Krativara"><link rel="manifest" href="/manifest.webmanifest"><meta name="theme-color" content="#FAF9F6" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#1C1916" media="(prefers-color-scheme: dark)"><link rel="preload" href="/fondid/instrument-sans-latin.woff2" as="font" type="font/woff2" crossorigin><link rel="apple-touch-icon" href="/apple-touch-icon.png"><style>${STIIL}</style></head>
 <body>${RIBA}<main id="sisu"><p class="vaike">Laen…</p></main><nav class="menyy" id="menyy" aria-label="Põhimenüü" hidden></nav>
 <script nonce="${nonce}">
 ${ABI}

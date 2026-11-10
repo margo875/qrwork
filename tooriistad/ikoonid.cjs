@@ -8,7 +8,7 @@ const R = path.join(__dirname, '..');
 const fondid = fs.readFileSync(path.join(R, 'src', 'fondid.js'), 'utf8');
 const FONT = 'data:font/woff2;base64,' + /'instrument-sans-latin\.woff2': '([^']+)'/.exec(fondid)[1];
 const PIND = '#FAF9F6', MARK = '#1C1C1A', TAPP = '#A33B20';
-const TEKST = 'KRATIVARA';
+const TEKST = 'VARA'; // Margo 10.11.2026: „K | VARA“ (nagu KODU-ikoonil)
 
 const K = `<rect x="20" y="16" width="18" height="68" rx="9" fill="${MARK}"/>
 <path d="M38 50 Q48 25 66 25" fill="none" stroke="${MARK}" stroke-width="18" stroke-linecap="round"/>
@@ -24,7 +24,7 @@ function svg(mask) {
 <clipPath id="c"><rect width="100" height="100" rx="${rx}"/></clipPath></defs>
 <g clip-path="url(#c)"><rect width="100" height="100" fill="${PIND}"/>
 <g transform="translate(${50 - 50 * s - 2.5 * s} ${y}) scale(${s})">${K}</g>
-<text x="50" y="${mask ? 78.3 : 85.6}" text-anchor="middle" font-family="IS" font-weight="600" font-size="${mask ? 7.4 : 9}" letter-spacing="${mask ? 1 : 1.2}" fill="${MARK}">${TEKST}</text></g></svg>`;
+<text x="50" y="${mask ? 78.3 : 85.6}" text-anchor="middle" font-family="IS" font-weight="600" font-size="${mask ? 8.4 : 10.4}" letter-spacing="${mask ? 1.6 : 2}" fill="${MARK}">${TEKST}</text></g></svg>`;
 }
 
 // Manifest kasutab sama faili nii „any“ kui ka „maskable“ jaoks, seega kõik ikoonid on maskable-kujul (märk ohutsoonis, pind servani).
@@ -39,6 +39,6 @@ function svg(mask) {
     await p.close();
   }
   await b.close();
-  fs.writeFileSync(path.join(R, 'src', 'ikoonid.js'), '// Rakenduse ikoonid (PWA, avakuva): Kindaveli K-märk + KRATIVARA, hele pind (nagu K | KODU). Genereeritud: node tooriistad/ikoonid.cjs\n' +
+  fs.writeFileSync(path.join(R, 'src', 'ikoonid.js'), '// Rakenduse ikoonid (PWA, avakuva): Kindaveli K-märk + VARA, hele pind (nagu K | KODU). Genereeritud: node tooriistad/ikoonid.cjs\n' +
     Object.entries(v).map(([k, x]) => `export const ${k} = '${x}';`).join('\n') + '\n');
 })();
