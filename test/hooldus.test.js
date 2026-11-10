@@ -126,3 +126,26 @@ test('PIN-i arvamine: IP piir ja töökäsu lukk 10 vea järel; tühistamine taa
   assert.equal(sd.olek, 'aktiivne'); assert.equal(sd.too, null);
   assert.equal((await telefon(env, '10.0.3.1')('/api/hooldus/pin', { kood: s.kood, pin: u.pin })).status, 404);
 });
+
+test('kontrolli leid: paralleelsed vale PIN-id ei pääse lukust mööda; lukk on ajutine; kustutatud seade sulgeb töökäsu', async () => {
+  const { env, A, s, h, reg } = await alus();
+  const t = (await A('hooldusse', { kood: s.kood, hooldaja: h.id })).j;
+  const ip = telefon(env, '11.0.0.1');
+  const r = await Promise.all(Array.from({ length: 50 }, (_, i) => ip('/api/hooldus/pin', { kood: s.kood, pin: String(10000000 + i) === t.pin ? '1' : String(10000000 + i) })));
+  assert.ok(r.filter((x) => x.status === 429).length >= 45, 'sama IP: üle 5 katse → 429 ka paralleelselt');
+  const palju = await Promise.all(Array.from({ length: 30 }, (_, i) => telefon(env, `12.0.0.${i}`)('/api/hooldus/pin', { kood: s.kood, pin: '0000000' + (i % 10) === t.pin ? '1' : '0000000' + (i % 10) })));
+  assert.ok(palju.filter((x) => x.status === 401).length <= 10, 'töökäsu kohta kuni 10 katset, siis lukus');
+  assert.equal((await telefon(env, '13.0.0.1')('/api/hooldus/pin', { kood: s.kood, pin: t.pin })).status, 423);
+  // lukk on ajutine: tunni pärast saab uuesti
+  const tk = await reg.s.get(`too:${t.too.id}`); tk.pin_lukk_kuni = Date.now() - 1; await reg.s.put(`too:${t.too.id}`, tk);
+  const hp = telefon(env, '14.0.0.1');
+  assert.equal((await hp('/api/hooldus/pin', { kood: s.kood, pin: t.pin })).j.ok, true);
+  // versioonide piir
+  let k = (await hp('/api/hooldus/kirje', { liik: 'muu', tekst: 'v0' })).j.too.kirjed[0];
+  for (let i = 1; i <= 8; i++) k = (await hp('/api/hooldus/kirje', { id: k.id, liik: 'muu', tekst: 'v' + i })).j.too.kirjed[0];
+  assert.equal((await A('too?id=' + t.too.id)).j.too.kirjed[0].ajalugu.length, 5);
+  // seadme kustutamine tühistab töökäsu ja sessiooni
+  assert.equal((await A('kustuta', { liik: 'seade', id: s.kood })).j.ok, true);
+  assert.equal((await hp('/api/hooldus/too', {})).status, 401);
+  assert.equal((await A('too?id=' + t.too.id)).j.too.olek, 'tuhistatud');
+});

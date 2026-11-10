@@ -5,7 +5,7 @@
 
 export const TOO_PAEVI = 30;          // töökäsu vaikimisi kehtivus
 export const TOO_PAEVI_MAX = 180;
-export const PIN_VEAD_MAX = 10;       // vigaseid PIN-e töökäsu kohta → lukus, haldur loob uue PIN-i
+export const PIN_VEAD_MAX = 10;       // iga 10 vale PIN-i järel töökäsu PIN 1 tunniks lukus (võõras ei saa jäädavalt lukustada)
 export const HSESS_MS = 12 * 3600 * 1000; // hooldaja sessioon telefonis (kuni töökäsu lõpuni, mitte kauem)
 export const HFAIL_MAX = 10 * 1024 * 1024;
 export const HFAIL_ARV = 40;
@@ -18,6 +18,7 @@ export const HFAIL_RE = /^h\/\d{6}\/\d{13}-[0-9A-Z]{6}\.(jpg|png|webp|pdf)$/;
 // PIN: 8 numbrit, HMAC(TOKEN_SECRET; töökäsu id, hooldusesse märkimise kuupäev, inventarinumber, hooldaja id, töökäsu juhuslik sool).
 // Seotud nende andmetega: kui mõni muutub (nt uus töökäsk või uus sool „Uus PIN“), kehtib uus PIN. PIN-i ennast ei salvestata.
 export async function looPin(secret, { id, kuupaev, invnr, hooldaja, nonce }) {
+  if (typeof secret !== 'string' || secret.length < 16) throw new Error('TOKEN_SECRET puudub või on lühem kui 16 märki');
   const voti = await crypto.subtle.importKey('raw', new TextEncoder().encode(String(secret || '')), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
   const sig = new Uint8Array(await crypto.subtle.sign('HMAC', voti, new TextEncoder().encode(['pin', id, kuupaev, invnr, hooldaja, nonce].join('|'))));
   let n = 0n;

@@ -1168,6 +1168,7 @@ export class Register {
     if (!x) return viga('Ei leitud', 404);
     if (x.kustutatud) return json({ ok: true });
     if (liik === 'seade' && await this.s.get(`laen:${id}`)) return viga('Seade on kasutaja nimel. Registreeri enne tagastus.', 409);
+    if (liik === 'seade' && x.too) { const t = await this.s.get(`too:${x.too}`); if (t && (t.olek === 'avatud' || t.olek === 'tehtud')) { await this.tooLopeta(t, 'tuhistatud'); x.too = null; } }
     if (liik === 'kasutaja') {
       const n = (await this.minuLaenud(id)).length;
       if (n) return viga(`Kasutaja nimel on ${n} seadet. Registreeri enne tagastus.`, 409);
@@ -1213,6 +1214,11 @@ export class Register {
         if (liik === 'seade') {
           for (const p of [`marge:${x.kood}:`, `ajalugu:${x.kood}:`, `bron:${x.kood}:`, `taatlus:${x.kood}:`, `hooldus:${x.kood}:`]) for (const [k2] of await this.loend(p)) await this.s.delete(k2);
           if (this.env.FOTOD) for (const d of x.dokumendid || []) await this.env.FOTOD.delete(d.voti).catch(() => {}); // arved, andmesildid
+          for (const [tv, t] of await this.loend('too:')) if (t.kood === x.kood) { // hoolduse töökäsud ja nende failid
+            if (t.token_rasi) await this.s.delete(`htoken:${t.token_rasi}`);
+            if (this.env.FOTOD) for (const f of t.failid || []) await this.env.FOTOD.delete(f.voti).catch(() => {});
+            await this.s.delete(tv);
+          }
         }
         if (liik === 'seade') { const pk = await this.s.get(`pkood:${x.kood}`); if (pk) await this.s.put(`pkood:${x.kood}`, { ...pk, kasutatud: true, seade: x.nimi }); } // partii kleebis on kasutatud: ei muutu uuesti vabaks
         if (liik === 'kasutaja') {
@@ -1358,7 +1364,7 @@ export class Register {
   async tooVotmed(t) {
     if (t.token_rasi) await this.s.delete(`htoken:${t.token_rasi}`);
     const link = juhuslik(32);
-    t.nonce = juhuslik(16); t.token_rasi = await sha256hex(link); t.pin_vead = 0;
+    t.nonce = juhuslik(16); t.token_rasi = await sha256hex(link); t.pin_vead = 0; t.pin_lukk_kuni = 0;
     await this.s.put(`htoken:${t.token_rasi}`, t.id);
     return { link, pin: await looPin(this.env.TOKEN_SECRET, { id: t.id, kuupaev: t.kuupaev, invnr: t.invnr, hooldaja: t.hooldaja, nonce: t.nonce }) };
   }
@@ -1441,23 +1447,32 @@ export class Register {
     if (!x || x.aegub < Date.now()) return null;
     const t = await this.s.get(`too:${x.too}`);
     if (!t || !this.tooAvatud(t) || t.nonce !== x.nonce) return null; // suletud, tühistatud või uus PIN → sessioon kehtetu
+    if (!(await this.elus(`seade:${t.kood}`))) return null; // kustutatud seade
     t._sess = sv;
     return t;
   }
+  // Kontrolli leid 10.11.2026: katse loetakse ENNE krüptot (crypto.subtle await laseb paralleelpäringud sisse), õnnestumisel nullitakse.
+  // Lukk on ajutine: iga 10 vea järel 1 tund (võõras ei saa hooldaja PIN-i jäädavalt lukku panna; arvamine ≤ 10 katset tunnis).
   async hPin({ kood, pin }, ip) {
     if (this.piiratud(`hpin:${ip}`, 5)) return viga('Liiga palju katseid. Proovi 15 minuti pärast.', 429);
+    this.viga(`hpin:${ip}`);
     const kk = normKood(kood || '');
     const s = kk ? await this.elus(`seade:${kk}`) : null;
     const t = s && s.too ? await this.s.get(`too:${s.too}`) : null;
-    if (!t || !this.tooAvatud(t)) { this.viga(`hpin:${ip}`); return viga('Seadmel ei ole avatud hoolduse töökäsku.', 404); }
-    if ((t.pin_vead || 0) >= PIN_VEAD_MAX) return viga('PIN on lukus (liiga palju vigaseid katseid). Küsi seadme omanikult uus PIN.', 423);
+    if (!t || !this.tooAvatud(t)) return viga('Seadmel ei ole avatud hoolduse töökäsku.', 404);
+    const nyyd = Date.now();
+    if ((t.pin_lukk_kuni || 0) > nyyd) return viga(`PIN on ajutiselt lukus (liiga palju vigaseid katseid). Proovi pärast ${eestiAeg(t.pin_lukk_kuni)} või kasuta töökäsu QR-i.`, 423);
+    t.pin_vead = (t.pin_vead || 0) + 1;
+    const lukku = t.pin_vead % PIN_VEAD_MAX === 0;
+    if (lukku) t.pin_lukk_kuni = nyyd + 3600 * 1000;
+    await this.s.put(`too:${t.id}`, t);
+    if (lukku) this.teavitaTaustal(`⚠️ Hoolduse PIN 1 tunniks lukus: ${t.seade_nimi} (${t.invnr}), ${t.pin_vead} vigast katset kokku. Vajadusel loo halduses uus PIN.`);
     const oige = await looPin(this.env.TOKEN_SECRET, { id: t.id, kuupaev: t.kuupaev, invnr: t.invnr, hooldaja: t.hooldaja, nonce: t.nonce });
-    if (!vordle(pinNorm(pin), oige)) {
-      this.viga(`hpin:${ip}`); t.pin_vead = (t.pin_vead || 0) + 1; await this.s.put(`too:${t.id}`, t);
-      if (t.pin_vead >= PIN_VEAD_MAX) this.teavitaTaustal(`⚠️ Hoolduse PIN lukus: ${t.seade_nimi} (${t.invnr}), ${PIN_VEAD_MAX} vigast katset. Loo halduses uus PIN.`);
-      return viga('Vale PIN.', 401);
-    }
-    t.pin_vead = 0; await this.s.put(`too:${t.id}`, t);
+    if (!vordle(pinNorm(pin), oige)) return viga('Vale PIN.', 401);
+    const t2 = await this.s.get(`too:${t.id}`);
+    if (!t2 || t2.nonce !== t.nonce || (t2.pin_lukk_kuni || 0) > nyyd && !lukku) return viga('PIN on ajutiselt lukus.', 423);
+    t2.pin_vead = 0; t2.pin_lukk_kuni = 0; await this.s.put(`too:${t.id}`, t2);
+    this.vead.delete(`hpin:${ip}`);
     await this.logi({ tyyp: 'hooldaja_sisenes', kood: t.kood, nimi: t.hooldaja_nimi, seade: t.seade_nimi, tekst: 'PIN' });
     return json({ ok: true }, 200, { 'Set-Cookie': await this.hSessioon(t) });
   }
@@ -1490,8 +1505,9 @@ export class Register {
       const v = kirjeValjad(b, hindArvuks); if (typeof v === 'string') return viga(v);
       let k = b.id ? t.kirjed.find((x) => x.id === b.id && !x.kustutatud) : null;
       if (b.id && !k) return viga('Sissekannet ei leitud', 404);
-      if (k) { k.ajalugu = [...(k.ajalugu || []), { liik: k.liik, tekst: k.tekst, kulu: k.kulu, aeg: k.muudetud || k.loodud }].slice(-20); Object.assign(k, v, { muudetud: nyyd }); }
+      if (k) { k.ajalugu = [...(k.ajalugu || []), { liik: k.liik, tekst: k.tekst, kulu: k.kulu, aeg: k.muudetud || k.loodud }].slice(-20); Object.assign(k, v, { muudetud: nyyd }); k.ajalugu = k.ajalugu.slice(-5); }
       else { if (t.kirjed.length >= HKIRJE_ARV) return viga('Sissekandeid on liiga palju.'); k = { id: juhuslik(8), ...v, loodud: nyyd, muudetud: null, ajalugu: [] }; t.kirjed.push(k); }
+      if (JSON.stringify(t).length > 600000) return viga('Töökäsk on liiga suur (liiga palju teksti). Lühenda sissekandeid.', 413);
       await this.s.put(`too:${t.id}`, t);
       if (t.kirjed.filter((x) => !x.kustutatud).length === 1 && !b.id) this.teavitaTaustal(`🔧 Hooldaja ${t.hooldaja_nimi} lisas esimese sissekande: ${t.seade_nimi} (${t.invnr})`);
       return json(await this.hooldajaVaade(t));
@@ -1523,6 +1539,7 @@ export class Register {
     delete t._sess;
     if (!this.env.FOTOD) return viga('Failide hoidla ei ole seadistatud.', 501);
     if (t.failid.filter((f) => !f.kustutatud).length >= HFAIL_ARV) return viga(`Kuni ${HFAIL_ARV} faili töökäsu kohta.`);
+    if (t.failid.length >= 2 * HFAIL_ARV || t.failid.reduce((a, f) => a + (f.suurus || 0), 0) > 300 * 1024 * 1024) return viga('Töökäsu failide piir on täis (koos eemaldatutega). Võta ühendust seadme omanikuga.', 413);
     if (this.piiratud(`hfail:${t.id}`, 60, 3600 * 1000)) return viga('Liiga palju faile, proovi hiljem.', 429);
     if (Number(request.headers.get('Content-Length') || 0) > HFAIL_MAX) return viga('Fail on liiga suur (kuni 10 MB).', 413);
     const b = await loeKeha(request, HFAIL_MAX);
