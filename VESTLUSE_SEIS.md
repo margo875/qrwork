@@ -2,7 +2,8 @@
 
 **10.11.2026 (lõim „Qrwork (krativara) 1110.01“):** Margo: „Jätka. Vaata ja ühtlusta disaini kindavel kodu äpiga, aga funktsionaalsuse poolelt on krativara töökohale/tööriistade/seadmete haldusele suunatud.“
 **Tehtud (haru `claude/kujundus-kodu`, aluseks `ccr-1519d9cb-57d2v9` 0.5.1):** 0.6.0 kujundus K | KODU B järgi (palett, fondid, päis, alumine menüü, olekuplokk, joonikoonid, tume teema, PWA ikoon KRATIVARA). Testid 41/41, kuvad 390 px hele/tume kontrollitud. Funktsionaalsus muutmata.
-**Ootel otsused:** (1) päise tekst „K Kindavel | krativara“ vs „K Krativara“ → vaikimisi esimene; (2) harude liitmine: `claude/project-thread-mjdpyp` (05.11, privaatsus, domeen krativara.kindavel.ee) läheb vastuollu selle haruga (leidja automaatne asukoht, Telegrami foto, domeen qrp.krativara.ee) → vaikimisi: domeen qrp.krativara.ee (Margo 02.11 sõnum), privaatsusharu muudatused liidetakse ükshaaval pärast Margo valikut.
+**Margo 10.11:** „Jääme krativara peale“ → päis „K Kindavel | krativara“ jääb.
+**Ootel:** Cloudflare'i seadistus lõpuni (tsoon krativara.ee, saladused, main'i liitmine, R2, Telegram), vt README „Paigaldus“; (2) harude liitmine: `claude/project-thread-mjdpyp` (05.11, privaatsus, domeen krativara.kindavel.ee) läheb vastuollu selle haruga (leidja automaatne asukoht, Telegrami foto, domeen qrp.krativara.ee) → vaikimisi: domeen qrp.krativara.ee (Margo 02.11 sõnum), privaatsusharu muudatused liidetakse ükshaaval pärast Margo valikut.
 
 ---
 (varasem seis 02.11.2026)
