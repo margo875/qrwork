@@ -122,3 +122,29 @@ test('pildilt lugemine: ettepanek, päevane piir, ilma AI-ta 501, PDF ei', async
   assert.equal((await bin(env2, 'loe?liik=arve', JPEG)).status, 501);
   assert.equal((await bin(env2, 'loe?liik=arve', JPEG, { Authorization: '' })).status, 401);
 });
+
+test('kontrolli leiud (10.11.2026): inventarinumber ei hüppa, tegija jääb, kuupäevad, hind, liik, korduv id, koristus', async () => {
+  const { env, A, koht, reg } = await alus();
+  const s1 = (await A('seade', { nimi: 'Üks', asukoht: koht.kood })).j.seade;
+  assert.equal((await A('seade', { nimi: 'Vigane', asukoht: koht.kood, ost_hind: 'abc' })).j.ok, false);
+  const s2 = (await A('seade', { nimi: 'Kaks', asukoht: koht.kood })).j.seade;
+  assert.equal(Number(s2.invnr.slice(-3)), Number(s1.invnr.slice(-3)) + 1, 'tagasi lükatud seade ei kuluta numbrit');
+  // tegija jääb järgmisel salvestamisel alles
+  const s = (await A('seade', { kood: s2.kood, nimi: 'Kaks', invnr: s2.invnr, asukoht: koht.kood, hooldused: [{ nimi: 'Hooldus', intervall: 12, viimati: '2026-01-10' }] })).j.seade;
+  await A('hooldus-tehtud', { kood: s.kood, id: s.hooldused[0].id, kuupaev: '2026-11-01', tegija: 'Hooldus OÜ' });
+  const r = (await A('seade', { kood: s.kood, nimi: 'Kaks', invnr: s.invnr, asukoht: koht.kood, hooldused: [{ id: s.hooldused[0].id, nimi: 'Hooldus', intervall: 12, viimati: '2026-11-01' }] })).j.seade;
+  assert.equal(r.hooldused[0].tegija, 'Hooldus OÜ');
+  // olematu kuupäev, tuleviku viimati, korduv id
+  assert.equal((await A('seade', { kood: s.kood, nimi: 'Kaks', invnr: s.invnr, asukoht: koht.kood, ost_kuupaev: '2026-02-30' })).j.ok, false);
+  assert.match(hooldusPlaanid([{ nimi: 'Aa', intervall: 6, viimati: '2099-01-01' }], [], '2026-11-10'), /tulevikus/);
+  const kaks = hooldusPlaanid([{ id: 'AAAAAA', nimi: 'Aa', intervall: 6, jargmine: '2027-01-01' }, { id: 'AAAAAA', nimi: 'Bb', intervall: 6, jargmine: '2027-01-01' }]);
+  assert.notEqual(kaks[0].id, kaks[1].id);
+  // hind
+  assert.equal(hindArvuks('1e3'), null); assert.equal(hindArvuks('12,345'), 12.35); assert.equal(hindArvuks('1.299.000'), 1299000); assert.equal(hindArvuks('99,90 €'), 99.9); assert.equal(hindArvuks('1 299 EUR'), 1299);
+  // liik: pärilik võti ei sobi
+  const d = await (await bin(env, 'dokument?liik=constructor', JPEG)).json();
+  assert.equal(d.dokument.liik, 'muu');
+  // koristus: sidumata dokument > 2 päeva ja vanad ai-loendurid kustuvad
+  await reg.koristaAjutised(Date.now() + 3 * 86400000);
+  assert.equal(env.FOTOD.m.has(d.dokument.voti), false); assert.equal((await reg.loend('dok:')).length, 0);
+});

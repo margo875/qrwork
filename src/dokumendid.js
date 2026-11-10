@@ -4,7 +4,7 @@
 
 export const AI_MUDEL = '@cf/meta/llama-3.2-11b-vision-instruct';
 export const AI_PAEVAS = 50;              // pildilugemisi ööpäevas kokku (kulude piir)
-export const AI_PILT_MAX = 4 * 1024 * 1024; // brauser vähendab pildi 1600 px-ni enne saatmist
+export const AI_PILT_MAX = 1.5 * 1024 * 1024; // brauser vähendab pildi 1600 px-ni (~0,3–0,8 MB); baitide massiiv mudelile on mälus suur
 export const DOK_MAX = 10 * 1024 * 1024;  // originaalfail (foto või PDF) hoidlasse
 export const DOK_ARV_MAX = 30;            // dokumente seadme kohta
 export const DOK_LIIGID = { arve: 'arve', tsekk: 'tšekk', andmesilt: 'andmesilt', garantii: 'garantii', juhend: 'kasutusjuhend', muu: 'muu' };
@@ -56,11 +56,17 @@ export function aiJson(v) {
 export function hindArvuks(v) {
   if (typeof v === 'number') return Number.isFinite(v) && v >= 0 && v < 1e7 ? Math.round(v * 100) / 100 : null;
   if (typeof v !== 'string') return null;
+  if (!/^[\s\d.,€-]*(eur|eurot)?\s*$/i.test(v)) return null; // tähed (nt „1e3“) → vigane
   let s = v.replace(/[^\d.,-]/g, '');
   if (!/\d/.test(s) || s.startsWith('-')) return null;
   const viimane = Math.max(s.lastIndexOf(','), s.lastIndexOf('.'));
   if (s.includes(',') && s.includes('.')) s = s.slice(0, viimane).replace(/[.,]/g, '') + '.' + s.slice(viimane + 1);
-  else if (viimane >= 0) s = /^\d{3}$/.test(s.slice(viimane + 1)) ? s.replace(/[.,]/g, '') : s.slice(0, viimane).replace(/[.,]/g, '') + '.' + s.slice(viimane + 1);
+  // üks eraldaja: punkt + 3 numbrit = tuhanded („1.299“), koma = alati kümnendkoht (Eesti kirjaviis: „12,345“ → 12,35 €);
+  // mitu sama eraldajat („1.299.000“) = tuhanded
+  else if (viimane >= 0) {
+    const ks = s.split(/[.,]/).length - 1, kum = s[viimane] === ',';
+    s = ks > 1 || (!kum && /^\d{3}$/.test(s.slice(viimane + 1))) ? s.replace(/[.,]/g, '') : s.slice(0, viimane).replace(/[.,]/g, '') + '.' + s.slice(viimane + 1);
+  }
   const n = Number(s);
   return hindArvuks(Number.isFinite(n) ? n : NaN);
 }
