@@ -179,3 +179,18 @@ test('ava uuesti (Margo 10.11.2026): 14 p채eva, uus link ja PIN, ajaloo kanne t�
   const tk = await reg.s.get(`too:${t.too.id}`); tk.suletud = Date.now() - 15 * 86400000; await reg.s.put(`too:${t.too.id}`, tk);
   assert.equal((await A('too-ava', { id: t.too.id, pohjus: 'garantii' })).status, 409);
 });
+
+test('ava uuesti: samaaegsed avamised annavad 체he kehtiva lingi; mitteaktiivne hooldaja ei saa ligip채채su tagasi', async () => {
+  const { env, A, s, h } = await alus();
+  const t = (await A('hooldusse', { kood: s.kood, hooldaja: h.id })).j;
+  await A('too-sulge', { id: t.too.id, olek: 'aktiivne' });
+  const [r1, r2] = await Promise.all([A('too-ava', { id: t.too.id, pohjus: 'esimene' }), A('too-ava', { id: t.too.id, pohjus: 'teine' })]);
+  const ok = [r1, r2].filter((r) => r.j.ok);
+  assert.ok(ok.length >= 1);
+  const kehtivad = [];
+  for (const r of ok) if ((await telefon(env, '30.0.0.' + kehtivad.length)('/api/hooldus/link', { token: r.j.link })).j.ok) kehtivad.push(r);
+  assert.equal(kehtivad.length, 1, 'ainult 체ks link kehtib');
+  await A('too-sulge', { id: t.too.id, olek: 'aktiivne' });
+  await A('hooldaja', { id: h.id, nimi: h.nimi, aktiivne: false });
+  assert.equal((await A('too-ava', { id: t.too.id, pohjus: 'garantii' })).status, 409);
+});

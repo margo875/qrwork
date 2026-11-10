@@ -1367,7 +1367,7 @@ export class Register {
     const link = juhuslik(32);
     t.nonce = juhuslik(16); t.token_rasi = await sha256hex(link); t.pin_vead = 0; t.pin_lukk_kuni = 0;
     await this.s.put(`htoken:${t.token_rasi}`, t.id);
-    return { link, pin: await looPin(this.env.TOKEN_SECRET, { id: t.id, kuupaev: t.kuupaev, invnr: t.invnr, hooldaja: t.hooldaja, nonce: t.nonce }) };
+    return { link, nonce: t.nonce, token_rasi: t.token_rasi, pin: await looPin(this.env.TOKEN_SECRET, { id: t.id, kuupaev: t.kuupaev, invnr: t.invnr, hooldaja: t.hooldaja, nonce: t.nonce }) };
   }
   async adminHooldusse({ kood, hooldaja, rike, paevi }) {
     const kk = normKood(kood || '');
@@ -1445,6 +1445,21 @@ export class Register {
     if (s.too && s.too !== t.id) { const muu = await this.s.get(`too:${s.too}`); if (muu && this.tooAvatud(muu)) return viga('Seadmel on teine avatud töökäsk.', 409); }
     const p = paevi === undefined || paevi === '' ? TOO_PAEVI : Number(paevi);
     if (!Number.isInteger(p) || p < 1 || p > TOO_PAEVI_MAX) return viga(`Kehtivus 1–${TOO_PAEVI_MAX} päeva.`);
+    const hj = await this.s.get(`hooldaja:${t.hooldaja}`);
+    if (!hj || hj.aktiivne === false) return viga('Hooldaja on mitteaktiivne. Aktiveeri hooldaja või loo uus töökäsk.', 409);
+    const v = await this.tooVotmed({ ...t }); // krüpto (await): pärast seda loe olek uuesti, samaaegne avamine või muutus katkestab
+    const t2 = await this.s.get(`too:${t.id}`), s2 = await this.elus(`seade:${t.kood}`);
+    const loobu = async (tekst) => { await this.s.delete(`htoken:${await sha256hex(v.link)}`); return viga(tekst, 409); };
+    if (!t2 || (t2.olek !== 'suletud' && t2.olek !== 'tuhistatud')) return loobu('Töökäsk on juba avatud.');
+    if (!s2) return loobu('Seade on kustutatud.');
+    if (await this.s.get(`laen:${t.kood}`)) return loobu('Seade on kellegi nimel. Registreeri enne tagastus.');
+    if (s2.too && s2.too !== t.id) { const muu = await this.s.get(`too:${s2.too}`); if (muu && this.tooAvatud(muu)) return loobu('Seadmel on teine avatud töökäsk.'); }
+    return this.tooAvaLopeta(t2, s2, v, ph, p, nyyd);
+  }
+  async tooAvaLopeta(t, s, v, ph, p, nyyd) {
+    const vanaRasi = t.token_rasi;
+    if (vanaRasi) await this.s.delete(`htoken:${vanaRasi}`);
+    t.nonce = v.nonce; t.token_rasi = v.token_rasi; t.pin_vead = 0; t.pin_lukk_kuni = 0;
     const z = t.sulgemine;
     if (t.olek === 'suletud' && z) {
       const hk = z.hooldus_voti ? await this.s.get(z.hooldus_voti) : null;
@@ -1454,7 +1469,6 @@ export class Register {
     }
     t.avamised = [...(t.avamised || []), { aeg: nyyd, pohjus: ph, olek_enne: t.olek }].slice(-20);
     t.olek = 'avatud'; t.suletud = null; t.sulgemine = null; t.kehtib_kuni = nyyd + p * 86400000;
-    const v = await this.tooVotmed(t);
     await this.s.put(`too:${t.id}`, t);
     s.olek = 'remondis'; s.too = t.id; s.muudetud = nyyd;
     await this.s.put(`seade:${t.kood}`, s);
@@ -1516,9 +1530,11 @@ export class Register {
   async hLink({ token }, ip) {
     if (this.piiratud(`hlink:${ip}`, 10)) return viga('Liiga palju katseid. Proovi 15 minuti pärast.', 429);
     if (typeof token !== 'string' || !/^[0-9A-Z]{32}$/.test(token)) { this.viga(`hlink:${ip}`); return viga('Vigane link.', 404); }
-    const id = await this.s.get(`htoken:${await sha256hex(token)}`);
+    const rasi = await sha256hex(token);
+    const id = await this.s.get(`htoken:${rasi}`);
     const t = id ? await this.s.get(`too:${id}`) : null;
-    if (!t || !this.tooAvatud(t)) { this.viga(`hlink:${ip}`); return viga('Link ei kehti (töökäsk on suletud või aegunud).', 404); }
+    if (!t || !this.tooAvatud(t) || t.token_rasi !== rasi) { // ainult töökäsu kehtiv link (orvuks jäänud htoken ei sobi)
+      this.viga(`hlink:${ip}`); return viga('Link ei kehti (töökäsk on suletud või aegunud).', 404); }
     await this.logi({ tyyp: 'hooldaja_sisenes', kood: t.kood, nimi: t.hooldaja_nimi, seade: t.seade_nimi, tekst: 'link' });
     return json({ ok: true }, 200, { 'Set-Cookie': await this.hSessioon(t) });
   }
