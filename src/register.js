@@ -18,7 +18,7 @@
 //   logi:<inv>:<r>, ajalugu:<kood>:<inv>:<r>   sündmused (inv = TS_MAX − aeg, uusimad ees)
 //   koht:<kood>                  töökoht (töökoha QR)
 //   seaded                       firma seaded
-import { TOO_PAEVI, TOO_PAEVI_MAX, PIN_VEAD_MAX, HSESS_MS, HFAIL_MAX, HFAIL_ARV, HKIRJE_ARV, HFAIL_LIIGID, HKIRJE_LIIGID, ETTEPANEKUD, HFAIL_RE, looPin, pinNorm, pinVorm, hooldajaValjad, kirjeValjad } from './hooldus.js';
+import { TOO_AVA_MS, TOO_PAEVI, TOO_PAEVI_MAX, PIN_VEAD_MAX, HSESS_MS, HFAIL_MAX, HFAIL_ARV, HKIRJE_ARV, HFAIL_LIIGID, HKIRJE_LIIGID, ETTEPANEKUD, HFAIL_RE, looPin, pinNorm, pinVorm, hooldajaValjad, kirjeValjad } from './hooldus.js';
 import { AI_MUDEL, AI_PAEVAS, AI_PILT_MAX, AI_JUHIS, DOK_MAX, DOK_ARV_MAX, DOK_LIIGID, DOK_RE, DOK_MIME, dokTyyp, aiJson, dokValjad, hindArvuks } from './dokumendid.js';
 import { teavita } from './teavita.js';
 
@@ -1025,6 +1025,7 @@ export class Register {
       case 'too-uus-pin': return this.adminTooPin(b);
       case 'too-sulge': return this.adminTooSulge(b);
       case 'too-tuhista': return this.adminTooTuhista(b);
+      case 'too-ava': return this.adminTooAva(b);
     }
     return viga('tundmatu', 404);
   }
@@ -1416,14 +1417,50 @@ export class Register {
       s.olek = uusOlek; s.muudetud = Date.now();
       const nyyd = Date.now(), d = tana(nyyd);
       const h = plaan ? (s.hooldused || []).find((x) => x.id === plaan) : null;
+      // „Ava uuesti“ jaoks: mis sulgemisel muutus (hooldusajaloo kanne, plaani eelmised kuupäevad)
+      const hv = `hooldus:${t.kood}:${String(1e15 - nyyd).padStart(16, '0')}:${juhuslik(4)}`;
+      t.sulgemine = { aeg: nyyd, hooldus_voti: hv, plaan: h ? { id: h.id, viimati: h.viimati, jargmine: h.jargmine, tegija: h.tegija || '' } : null, olek: uusOlek };
       if (h) { h.viimati = d; h.jargmine = kuudLisa(d, h.intervall); h.tegija = t.hooldaja_nimi; }
       await this.s.put(`seade:${t.kood}`, s);
+      await this.s.put(`too:${t.id}`, t);
       const tekst = [puhasta(markus, 300), ...kirjed.map((k) => k.tekst.replace(/\s+/g, ' ').slice(0, 200))].filter(Boolean).join(' · ').slice(0, 1000);
-      await this.s.put(`hooldus:${t.kood}:${String(1e15 - nyyd).padStart(16, '0')}:${juhuslik(4)}`,
+      await this.s.put(hv,
         { kood: t.kood, plaan: h ? h.id : null, nimi: h ? h.nimi : 'Väline hooldus', kuupaev: d, jargmine: h ? h.jargmine : null, tegija: t.hooldaja_nimi, markus: tekst, kulu: kulu ? Math.round(kulu * 100) / 100 : null, too: t.id, aeg: nyyd });
     }
     await this.logi({ tyyp: 'too_suletud', kood: t.kood, nimi: 'haldur', seade: t.seade_nimi, tekst: `${t.hooldaja_nimi}, olek ${uusOlek}` });
     return json({ ok: true, too: this.tooHaldurile(t) });
+  }
+  // Ava uuesti (Margo 10.11.2026): suletud või tühistatud töökäsk kuni 14 päeva jooksul. Sama töökäsk koos sissekannete ja failidega,
+  // uus link ja PIN (vana paber ei anna ligipääsu tagasi). Sulgemise hooldusajaloo kanne märgitakse tühistatuks, plaani kuupäevad taastatakse.
+  async adminTooAva({ id, pohjus, paevi }) {
+    const t = await this.s.get(`too:${String(id || '').replace(/[^0-9A-Z]/g, '')}`);
+    if (!t || (t.olek !== 'suletud' && t.olek !== 'tuhistatud')) return viga('Suletud töökäsku ei leitud', 404);
+    const nyyd = Date.now();
+    if (nyyd - (t.suletud || 0) > TOO_AVA_MS) return viga('Sulgemisest on möödas üle 14 päeva. Loo uus töökäsk.', 409);
+    const ph = puhastaMitmerealine(pohjus, 300);
+    if (ph.length < 3) return viga('Kirjuta uuesti avamise põhjus.');
+    const s = await this.elus(`seade:${t.kood}`);
+    if (!s) return viga('Seade on kustutatud.', 409);
+    if (await this.s.get(`laen:${t.kood}`)) return viga('Seade on kellegi nimel. Registreeri enne tagastus.', 409);
+    if (s.too && s.too !== t.id) { const muu = await this.s.get(`too:${s.too}`); if (muu && this.tooAvatud(muu)) return viga('Seadmel on teine avatud töökäsk.', 409); }
+    const p = paevi === undefined || paevi === '' ? TOO_PAEVI : Number(paevi);
+    if (!Number.isInteger(p) || p < 1 || p > TOO_PAEVI_MAX) return viga(`Kehtivus 1–${TOO_PAEVI_MAX} päeva.`);
+    const z = t.sulgemine;
+    if (t.olek === 'suletud' && z) {
+      const hk = z.hooldus_voti ? await this.s.get(z.hooldus_voti) : null;
+      if (hk) { hk.tyhistatud = nyyd; hk.tyhistus = `avati uuesti: ${ph}`; await this.s.put(z.hooldus_voti, hk); }
+      const h = z.plaan ? (s.hooldused || []).find((x) => x.id === z.plaan.id) : null;
+      if (h) { h.viimati = z.plaan.viimati; h.jargmine = z.plaan.jargmine; h.tegija = z.plaan.tegija; }
+    }
+    t.avamised = [...(t.avamised || []), { aeg: nyyd, pohjus: ph, olek_enne: t.olek }].slice(-20);
+    t.olek = 'avatud'; t.suletud = null; t.sulgemine = null; t.kehtib_kuni = nyyd + p * 86400000;
+    const v = await this.tooVotmed(t);
+    await this.s.put(`too:${t.id}`, t);
+    s.olek = 'remondis'; s.too = t.id; s.muudetud = nyyd;
+    await this.s.put(`seade:${t.kood}`, s);
+    await this.logi({ tyyp: 'too_avatud_uuesti', kood: t.kood, nimi: 'haldur', seade: t.seade_nimi, tekst: ph });
+    this.teavitaTaustal(`🔁 Hoolduse töökäsk avati uuesti: ${t.seade_nimi} (${t.invnr}), ${t.hooldaja_nimi}. Põhjus: ${ph}`);
+    return json({ ok: true, too: this.tooHaldurile(t), link: v.link, pin: v.pin, pin_vorm: pinVorm(v.pin) });
   }
   async adminTooTuhista({ id }) {
     const t = await this.s.get(`too:${String(id || '').replace(/[^0-9A-Z]/g, '')}`);

@@ -149,3 +149,33 @@ test('kontrolli leid: paralleelsed vale PIN-id ei pääse lukust mööda; lukk o
   assert.equal((await hp('/api/hooldus/too', {})).status, 401);
   assert.equal((await A('too?id=' + t.too.id)).j.too.olek, 'tuhistatud');
 });
+
+test('ava uuesti (Margo 10.11.2026): 14 päeva, uus link ja PIN, ajaloo kanne tühistatud, plaani kuupäevad tagasi', async () => {
+  const { env, A, s, h, reg } = await alus();
+  const plaan = s.hooldused[0];
+  const t = (await A('hooldusse', { kood: s.kood, hooldaja: h.id })).j;
+  const hp = telefon(env, '20.0.0.1'); await hp('/api/hooldus/link', { token: t.link });
+  await hp('/api/hooldus/kirje', { liik: 'too', tekst: 'Kalibreeritud', kulu: '50' });
+  assert.equal((await A('too-ava', { id: t.too.id, pohjus: 'x x' })).status, 404, 'avatud töökäsku ei ava uuesti');
+  await A('too-sulge', { id: t.too.id, olek: 'aktiivne', plaan: plaan.id });
+  assert.notEqual((await A('ulevaade')).j.seadmed.find((x) => x.kood === s.kood).hooldused[0].viimati, plaan.viimati);
+  assert.equal((await A('too-ava', { id: t.too.id, pohjus: '' })).j.ok, false, 'põhjus kohustuslik');
+  const c = klient(env); await c('/api/registreeru', { nimi: 'Mari Maasikas', tel: '51234567', parool: 'salasõna', koht: (await A('ulevaade')).j.kohad[0].kood });
+  await c('/api/vota', { koodid: [s.kood] });
+  assert.equal((await A('too-ava', { id: t.too.id, pohjus: 'suleti ekslikult' })).status, 409, 'seade kellegi nimel');
+  await c('/api/tagasta', { koodid: [s.kood] });
+  const r = (await A('too-ava', { id: t.too.id, pohjus: 'suleti ekslikult' })).j;
+  assert.equal(r.ok, true); assert.notEqual(r.link, t.link); assert.notEqual(r.pin, t.pin);
+  assert.equal(r.too.olek, 'avatud'); assert.equal(r.too.kirjed.length, 1, 'sissekanded alles'); assert.equal(r.too.avamised.length, 1);
+  const sd = (await A('ulevaade')).j.seadmed.find((x) => x.kood === s.kood);
+  assert.equal(sd.olek, 'remondis'); assert.equal(sd.too, t.too.id);
+  assert.equal(sd.hooldused[0].viimati, plaan.viimati); assert.equal(sd.hooldused[0].jargmine, plaan.jargmine);
+  const aj = (await A('hooldused?kood=' + s.kood)).j.hooldused[0];
+  assert.ok(aj.tyhistatud); assert.match(aj.tyhistus, /suleti ekslikult/);
+  assert.equal((await telefon(env, '20.0.0.2')('/api/hooldus/link', { token: t.link })).status, 404, 'vana link ei kehti');
+  assert.equal((await telefon(env, '20.0.0.3')('/api/hooldus/link', { token: r.link })).j.ok, true);
+  // 14 päeva piir
+  await A('too-tuhista', { id: t.too.id });
+  const tk = await reg.s.get(`too:${t.too.id}`); tk.suletud = Date.now() - 15 * 86400000; await reg.s.put(`too:${t.too.id}`, tk);
+  assert.equal((await A('too-ava', { id: t.too.id, pohjus: 'garantii' })).status, 409);
+});

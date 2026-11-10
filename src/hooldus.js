@@ -5,6 +5,7 @@
 
 export const TOO_PAEVI = 30;          // töökäsu vaikimisi kehtivus
 export const TOO_PAEVI_MAX = 180;
+export const TOO_AVA_MS = 14 * 86400000; // suletud/tühistatud töökäsku saab uuesti avada 14 päeva jooksul (Margo 10.11.2026)
 export const PIN_VEAD_MAX = 10;       // iga 10 vale PIN-i järel töökäsu PIN 1 tunniks lukus (võõras ei saa jäädavalt lukustada)
 export const HSESS_MS = 12 * 3600 * 1000; // hooldaja sessioon telefonis (kuni töökäsu lõpuni, mitte kauem)
 export const HFAIL_MAX = 10 * 1024 * 1024;
