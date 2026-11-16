@@ -11,8 +11,8 @@ async function alus() {
   const s2 = (await A('seade', { nimi: 'Laser', asukoht: koht.kood })).j.seade;
   const s3 = (await A('seade', { nimi: 'Puur', asukoht: koht.kood })).j.seade;
   const mari = klient(k.env), jaan = klient(k.env);
-  assert.equal((await mari('/api/registreeru', { nimi: 'Mari Maasikas', tel: '5123 4567', parool: 'salasõna', koht: koht.kood })).status, 200);
-  assert.equal((await jaan('/api/registreeru', { nimi: 'Jaan Tamm', tel: '+37255555555', parool: 'salasõna2', koht: koht.kood })).status, 200);
+  assert.equal((await mari('/api/registreeru', { nimi: 'Mari Maasikas', tel: '5123 4567', parool: 'salasõna', koht: koht.kood, noustun: true })).status, 200);
+  assert.equal((await jaan('/api/registreeru', { nimi: 'Jaan Tamm', tel: '+37255555555', parool: 'salasõna2', koht: koht.kood, noustun: true })).status, 200);
   return { ...k, A, koht, s1, s2, s3, mari, jaan };
 }
 
@@ -35,8 +35,8 @@ test('abifunktsioonid', () => {
 test('registreerimine ja sisselogimine', async () => {
   const { env, koht } = await alus();
   const c = klient(env);
-  assert.equal((await c('/api/registreeru', { nimi: 'X Y', tel: '51234567', parool: 'qwerty', koht: koht.kood })).status, 409);
-  assert.equal((await c('/api/registreeru', { nimi: 'X Y', tel: '51111111', parool: 'qwerty' })).status, 400, 'töökoha koodita ei saa');
+  assert.equal((await c('/api/registreeru', { nimi: 'X Y', tel: '51234567', parool: 'qwerty', koht: koht.kood, noustun: true })).status, 409);
+  assert.equal((await c('/api/registreeru', { nimi: 'X Y', tel: '51111111', parool: 'qwerty', noustun: true })).status, 400, 'töökoha koodita ei saa');
   assert.equal((await c('/api/logi-sisse', { tel: '51234567', parool: 'vale' })).status, 401);
   const r = await c('/api/logi-sisse', { tel: '+372 5123 4567', parool: 'salasõna' });
   assert.equal(r.status, 200); assert.equal(r.j.mina.kasutaja.nimi, 'Mari Maasikas');
@@ -159,7 +159,7 @@ test('vaikimisi registreerimine vajab halduri kinnitust', async () => {
   const A = admin(env);
   const koht2 = (await A('koht', { nimi: 'Objekt' })).j.koht;
   const c = klient(env);
-  const r = await c('/api/registreeru', { nimi: 'Uus Töötaja', tel: '53333333', parool: 'qwerty1', koht: koht2.kood });
+  const r = await c('/api/registreeru', { nimi: 'Uus Töötaja', tel: '53333333', parool: 'qwerty1', koht: koht2.kood, noustun: true });
   assert.equal(r.j.mina.kasutaja.olek, 'ootel');
   assert.equal((await c('/api/vota', { koodid: [s1.kood] })).status, 403);
   assert.equal((await A('kasutaja', { id: r.j.mina.kasutaja.id, olek: 'aktiivne' })).j.ok, true);
@@ -174,7 +174,7 @@ test('ülevaatuse parandused: ootel kasutaja, IPv6, koduladu', async () => {
   await mari('/api/vota', { koodid: [s1.kood] });
   const koht2 = (await A('koht', { nimi: 'Objekt' })).j.koht;
   const c = klient(env);
-  await c('/api/registreeru', { nimi: 'Võõras Inimene', tel: '54444444', parool: 'qwerty1', koht: koht2.kood });
+  await c('/api/registreeru', { nimi: 'Võõras Inimene', tel: '54444444', parool: 'qwerty1', koht: koht2.kood, noustun: true });
   assert.equal((await c('/api/otsi', { q: '' })).status, 403);
   assert.equal((await c('/api/marge', { kood: s1.kood, tyyp: 'ei_toota' })).status, 403);
   const kaart = (await c('/api/seade', { kood: s1.kood })).j.seade;
@@ -243,7 +243,7 @@ test('kustutamine: 30 päeva taastatav, siis lõplik', async () => {
   assert.equal(await storage.get(`seade:${s2.kood}`), undefined);
   assert.equal(await storage.get(`kasutaja:${jid}`), undefined);
   assert.equal((await A('taasta', { liik: 'seade', id: s2.kood })).status, 404);
-  assert.equal((await klient(env)('/api/registreeru', { nimi: 'Jaan Uus', tel: '+37255555555', parool: 'qwerty1', koht: koht.kood })).status, 200);
+  assert.equal((await klient(env)('/api/registreeru', { nimi: 'Jaan Uus', tel: '+37255555555', parool: 'qwerty1', koht: koht.kood, noustun: true })).status, 200);
   assert.ok((await A('logi')).j.logi.some((x) => x.tyyp === 'lopp_kustutatud'));
 });
 

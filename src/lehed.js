@@ -4,11 +4,13 @@
 import { QR_JS } from './qrgen.js';
 
 // Skännitud QR teksti tõlgendus. Kehtib ainult sama hosti /S/<kood> (seade) või /K/<kood> (töökoht).
+// host võib olla ka massiiv (praegune + vana aadress kratt.kindavel.ee, mis suunab uuele).
 // Funktsioon läheb lehele .toString() abil, seega sama kood töötab brauseris ja testides.
 export function koodTekstist(t, host) {
   t = String(t || '').trim();
   const m = /^https?:\/\/([^/?#\s]+)\/([SKI])\/([0-9A-Z]{12})\/?$/i.exec(t);
-  if (!m || m[1].toLowerCase() !== String(host || '').toLowerCase()) return null;
+  const hostid = (Array.isArray(host) ? host : [host]).map((h) => String(h || '').toLowerCase());
+  if (!m || !hostid.includes(m[1].toLowerCase())) return null;
   return { liik: m[2].toUpperCase(), kood: m[3].toUpperCase() };
 }
 export function kasitsiKood(v) {
@@ -39,7 +41,7 @@ video{width:100%;max-height:45vh;background:#000;border-radius:12px;object-fit:c
 
 export function appLeht(nonce, { seade = '', koht = '', info = '' } = {}) {
   return `<!doctype html><html lang="et"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex"><title>Kratt</title><style>${STIIL}</style></head>
+<meta name="robots" content="noindex"><title>Krativara</title><style>${STIIL}</style></head>
 <body><main id="sisu"><p>Laen…</p></main>
 <script nonce="${nonce}">
 ${ABI}
@@ -54,7 +56,7 @@ async function api(tee,keha){
   catch(e){return {ok:false,viga:'Võrguühendus puudub. Proovi uuesti.'}}
 }
 const sisu=h=>{peata();$('#sisu').innerHTML=h;window.scrollTo(0,0);};
-const pea=()=>'<h1>'+esc(S.firma||'Kratt')+'</h1>';
+const pea=()=>'<h1>'+esc(S.firma||'Krativara')+'</h1>';
 
 // ---------- algus ----------
 (async function(){
@@ -78,17 +80,19 @@ function sisene(pealeSeade,algus){
      '<label>Telefon</label><input id="tel" type="tel" autocomplete="tel" inputmode="tel" value="'+esc(LS.get('qw_tel'))+'" placeholder="5123 4567">'+
      '<label>Vali parool (vähemalt 6 märki)</label><input id="par" type="password" autocomplete="new-password">'+
      '<p class="vaike">Sinu nimi ja telefon on nähtavad kolleegidele ja administraatorile, kui seade on sinu nimel (et seadet leida).</p>'+
+     '<label class="mark"><input type="checkbox" id="noustun"><span>Olen tutvunud <a href="/tingimused" target="_blank" rel="noopener">kasutustingimuste</a> ja <a href="/privaatsus" target="_blank" rel="noopener">privaatsusteabega</a></span></label>'+
      '<button class="suur roh" id="saada">Registreeru</button>'
    :'<label>Telefon</label><input id="tel" type="tel" autocomplete="username" inputmode="tel" value="'+esc(LS.get('qw_tel'))+'" placeholder="5123 4567">'+
      '<label>Parool</label><input id="par" type="password" autocomplete="current-password">'+
      '<button class="suur sin" id="saada">Logi sisse</button><p><a href="#" id="unustasin">Unustasid parooli?</a></p>'+
+     '<p class="vaike"><a href="/tingimused" target="_blank" rel="noopener">Kasutustingimused</a> · <a href="/privaatsus" target="_blank" rel="noopener">Privaatsusteave</a></p>'+
      (reg?'':'<p class="vaike">Uue kasutaja loomiseks skänni töökoha QR-kood.</p>'))+
    '<div id="teade"></div></div>');
   if($('#t1'))$('#t1').onclick=()=>sisene(pealeSeade,'sisse'); if($('#t2'))$('#t2').onclick=()=>sisene(pealeSeade,'reg');
   if($('#unustasin'))$('#unustasin').onclick=e=>{e.preventDefault();taastus(pealeSeade)};
   $('#saada').onclick=async()=>{
     const tel=$('#tel').value, parool=$('#par').value; $('#saada').disabled=true;
-    const j=tab==='reg'?await api('/api/registreeru',{nimi:$('#nimi').value,tel,parool,koht:S.koht&&S.koht.kood}):await api('/api/logi-sisse',{tel,parool});
+    const j=tab==='reg'?await api('/api/registreeru',{nimi:$('#nimi').value,tel,parool,koht:S.koht&&S.koht.kood,noustun:$('#noustun').checked}):await api('/api/logi-sisse',{tel,parool});
     $('#saada').disabled=false;
     if(!j.ok){$('#teade').innerHTML='<div class="viga">'+esc(j.viga||'Viga')+'</div>';return;}
     LS.set('qw_tel',j.mina.kasutaja.tel); LS.set('qw_nimi',j.mina.kasutaja.nimi); S.mina=j.mina;
@@ -221,7 +225,7 @@ function skanner(reziim){
     if(navigator.vibrate)navigator.vibrate(80);
     valik.push({kood,info:j,ule:false,teise:false}); teade('Lisatud: '+j.seade.nimi,'ok'); joonista();
   };
-  const tekstist=t=>{const k=koodTekstist(t,location.host);
+  const tekstist=t=>{const k=koodTekstist(t,[location.host,'kratt.kindavel.ee']);
     if(!k){teade('Tundmatu QR-kood. Pöördu administraatori poole.');if(navigator.vibrate)navigator.vibrate([200,100,200]);return;}
     if(k.liik==='K'){teade('See on töökoha QR-kood. Skänni seadmel olevat koodi.','hoiatus');return;}
     if(k.liik==='I'){teade('See on kataloogi QR-kood (ainult otsinguks). Skänni seadmel olevat koodi.','hoiatus');return;}
@@ -304,7 +308,7 @@ function otsing(){
    '<div id="kaam" hidden><video id="vid" muted playsinline></video><div id="teade"></div></div><div id="tul"></div><button class="suur" id="tagasi">Tagasi</button>');
   $('#tagasi').onclick=()=>pohi();
   $('#qr').onclick=()=>{ if(toimib){peata();$('#kaam').hidden=true;return;} $('#kaam').hidden=false;
-    kaamera($('#vid'),t=>{const k=koodTekstist(t,location.host);
+    kaamera($('#vid'),t=>{const k=koodTekstist(t,[location.host,'kratt.kindavel.ee']);
       if(!k||k.liik==='K'){$('#teade').innerHTML='<div class="viga">'+(k?'See on töökoha QR-kood.':'Tundmatu QR-kood. Pöördu administraatori poole.')+'</div>';if(navigator.vibrate)navigator.vibrate([200,100,200]);return;}
       peata(); seadmeVaade(k.kood,false);},t=>{$('#teade').innerHTML='<div class="hoiatus">'+esc(t)+'</div>';}); };
   let t=null; const otsi=async()=>{const j=await api('/api/otsi',{q:$('#q').value}); if(!j.ok){$('#tul').innerHTML='<div class="viga">'+esc(j.viga)+'</div>';return;}
@@ -338,7 +342,11 @@ async function leidjaVaade(kood){
   sisu('<h1>'+esc(j.firma)+'</h1><div class="kaart"><p>See tööriist kuulub firmale <b>'+esc(j.firma)+'</b>:<br><b>'+esc(j.nimi)+'</b>'+(j.invnr?' ('+esc(j.invnr)+')':'')+'</p>'+
    '<p>Leidsid selle? Palun anna teada, kus see on. Aitäh!</p>'+(j.telefon?'<a class="nupp roh" href="tel:'+esc(j.telefon)+'">📞 Helista '+esc(j.telefon)+'</a>':'')+
    '<label>Kus seade on / sõnum</label><textarea id="tekst" rows="3" maxlength="500"></textarea><label>Sinu kontakt (valikuline)</label><input id="kontakt" maxlength="100">'+
-   '<label class="mark"><input type="checkbox" id="gps" checked><span>Lisa minu asukoht (brauser küsib luba)</span></label><button class="suur roh" id="saada">Saada teade</button><div id="teade"></div></div>'+
+   '<label class="mark"><input type="checkbox" id="gps"><span>Lisa minu asukoht (brauser küsib luba)</span></label>'+
+   '<p class="vaike">Asukoht saadetakse ainult siis, kui märgid selle kasti ja lubad telefonil selle saata. See läheb koos teatega seadme haldurile'+(j.kanalid&&j.kanalid.length?' ('+esc(j.kanalid.join(' / '))+')':'')+' ja seda hoitakse kuni '+esc(j.leid_paevi||90)+' päeva.</p>'+
+   '<button class="suur roh" id="saada">Saada teade</button><div id="teade"></div>'+
+   '<p class="vaike">Saadame teate seadme omanikule '+esc(j.firma)+'. Asukoht ainult sinu loal. <a href="/privaatsus#leidja" target="_blank" rel="noopener">Privaatsusteave</a> · <a href="/tingimused#leidja" target="_blank" rel="noopener">Tingimused</a></p>'+
+   (j.privaatsus?'<details class="vaike"><summary>Sinu andmed</summary>'+j.privaatsus+'</details>':'')+'</div>'+
    '<div class="kaart"><p class="vaike">Oled selle firma töötaja?</p><button id="sisse">Logi sisse</button></div>');
   $('#sisse').onclick=()=>sisene(kood,'sisse');
   $('#saada').onclick=async()=>{ $('#saada').disabled=true; $('#teade').innerHTML='<div class="vaike">Saadan…</div>';
@@ -351,7 +359,7 @@ async function leidjaVaade(kood){
 
 export function adminLeht(nonce) {
   return `<!doctype html><html lang="et"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex"><title>Krati haldus</title><style>${STIIL}
+<meta name="robots" content="noindex"><title>Krativara haldus</title><style>${STIIL}
 main{max-width:1100px}table{border-collapse:collapse;width:100%;background:#fff;font-size:.9rem}td,th{border-bottom:1px solid #e5e7eb;padding:6px;text-align:left;vertical-align:top}
 .tabs{flex-wrap:wrap}.tabs button{flex:0 0 auto}.vana{background:#fee2e2}button.v{padding:6px 10px;font-size:.85rem;margin:2px}
 .vorm{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:0 12px}
@@ -360,7 +368,7 @@ main{max-width:1100px}table{border-collapse:collapse;width:100%;background:#fff;
  .sildid{display:flex;flex-wrap:wrap;gap:3mm}.silt{width:32mm;height:44mm;border:0.2mm dashed #999;padding:1mm;text-align:center;font:bold 2.6mm/1.15 Arial,sans-serif;overflow:hidden;break-inside:avoid}
  .silt svg{width:28mm;height:28mm;display:block;margin:0 auto}.silt .k{font:2.2mm monospace}
  .plakat{text-align:center;font-family:Arial,sans-serif;page-break-after:always}.plakat svg{width:120mm;height:120mm}.plakat h1{font-size:12mm;margin:6mm 0 2mm}.plakat h2{font-size:9mm;margin:0 0 6mm}.plakat ol{text-align:left;font-size:5.5mm;max-width:160mm;margin:6mm auto}}
-</style></head><body><main id="m"><h1>Krati haldus</h1>
+</style></head><body><main id="m"><h1>Krativara haldus</h1>
 <div id="login" class="kaart"><label>Halduse võti (ADMIN_TOKEN)</label><input id="tok" type="password" autocomplete="current-password">
 <label class="mark"><input type="checkbox" id="mal"><span>Jäta selles brauseris meelde</span></label><button class="sin" id="sisse">Ava</button><div id="lviga"></div></div>
 <div id="app" hidden><div class="tabs" id="tabs"></div><div id="sisu"></div></div></main><div id="print"></div>
@@ -482,37 +490,53 @@ function kohad(){
 
 function kasutajad(){
   const O={aktiivne:'aktiivne',ootel:'ootab kinnitust',blokeeritud:'peatatud'};
+  const ol=k=>k.anon?'anonüümitud':k.lahkunud?'lahkunud '+aeg(k.lahkunud).slice(0,10):O[k.olek];
   $('#sisu').innerHTML='<h2>Kasutajad ('+U.kasutajad.length+')</h2><table><tr><th>Nimi</th><th>Telefon</th><th>Olek</th><th>Seadmeid</th><th>Hilinenud tagastusi</th><th>Kinnitamata</th><th>Super­kasutaja</th><th></th></tr>'+
-   U.kasutajad.map(k=>'<tr'+kustStiil(k)+'><td>'+esc(k.nimi)+'</td><td><a href="tel:'+esc(k.tel)+'">'+esc(k.tel)+'</a></td><td>'+O[k.olek]+'</td><td>'+k.seadmeid+'</td><td>'+(k.hilinenud||0)+'</td><td>'+k.kinnitamata+'</td><td><input type="checkbox" style="width:auto" data-super="'+k.id+'"'+(k.super?' checked':'')+'></td><td>'+
+   U.kasutajad.map(k=>'<tr'+kustStiil(k)+'><td>'+esc(k.nimi)+'</td><td><a href="tel:'+esc(k.tel)+'">'+esc(k.tel)+'</a></td><td>'+ol(k)+'</td><td>'+k.seadmeid+'</td><td>'+(k.hilinenud||0)+'</td><td>'+k.kinnitamata+'</td><td><input type="checkbox" style="width:auto" data-super="'+k.id+'"'+(k.super?' checked':'')+'></td><td>'+
     (k.olek!=='aktiivne'?'<button class="v roh" data-olek="aktiivne" data-id="'+k.id+'">Aktiveeri</button>':'<button class="v" data-olek="blokeeritud" data-id="'+k.id+'">Peata</button>')+
+    (k.lahkunud?'':'<button class="v" data-lahkunud="'+k.id+'">Lahkunud</button>')+'<button class="v" data-eksport="'+k.id+'">⬇ Andmed</button>'+
     '<button class="v" data-lahtesta="'+k.id+'">Taastuskood</button>'+(k.kinnitamata?'<button class="v" data-keeld="'+k.id+'">Eemalda keeld</button>':'')+kustNupp('kasutaja',k.id,k)+'</td></tr>').join('')+'</table>';
   document.querySelectorAll('[data-super]').forEach(c=>c.onchange=async()=>{const j=await a('kasutaja',{id:c.dataset.super,super:c.checked});if(!j.ok){alert(j.viga);c.checked=!c.checked;}else U=await a('ulevaade');});
   document.querySelectorAll('[data-olek]').forEach(b=>b.onclick=async()=>{const j=await a('kasutaja',{id:b.dataset.id,olek:b.dataset.olek});j.ok?(U=await a('ulevaade'),kasutajad()):alert(j.viga);});
+  document.querySelectorAll('[data-lahkunud]').forEach(b=>b.onclick=async()=>{if(!confirm('Märgi töötaja lahkunuks? Konto peatatakse, parool ja sessioonid kustutatakse; nimi ja telefon anonüümitakse säilitusaja järel.'))return;
+    const korras=confirm('Kas seadmete üleandmine oli korras (puudujääki ei olnud)?\\nOK = jah (anonüümimine '+U.seaded.sail_lahkunud_korras_paevi+' päeva pärast), Loobu = ei / ei tea ('+U.seaded.sail_lahkunud_kuud+' kuu pärast).');
+    const j=await a('kasutaja',{id:b.dataset.lahkunud,lahkunud:true,korras});j.ok?(U=await a('ulevaade'),kasutajad()):alert(j.viga);});
+  document.querySelectorAll('[data-eksport]').forEach(b=>b.onclick=()=>lae_alla('eksport.json?kasutaja='+b.dataset.eksport,'kasutaja-'+b.dataset.eksport+'.json'));
   document.querySelectorAll('[data-lahtesta]').forEach(b=>b.onclick=async()=>{const j=await a('lahtesta',{id:b.dataset.lahtesta});alert(j.ok?'Taastuskood: '+j.kood+'\\nKehtib 24 h. Anna see kasutajale (sisselogimise lehel „Unustasid parooli?“).':j.viga);});
   document.querySelectorAll('[data-keeld]').forEach(b=>b.onclick=async()=>{const j=await a('kinnitused-eemalda',{id:b.dataset.keeld});j.ok?(U=await a('ulevaade'),kasutajad()):alert(j.viga);});
 }
-const SYND={broneering:'broneeris',broneering_tyhistatud:'tühistas broneeringu',taatlus_tehtud:'taatlus registreeritud',kustutatud:'kustutatud (taastatav 30 p)',taastatud:'taastatud',lopp_kustutatud:'lõplikult kustutatud',vott:'võttis',tagastus:'tagastas',ulevott:'võttis üle',tagastus_teise_eest:'märkis tagastatuks teise eest',kinnitas:'kinnitas ülevõtu',vaidlus:'vaidlustas',marge:'märkus',registreerus:'registreerus',leiuteade:'leiuteade',tagastus_halduri_poolt:'haldur tagastas',seade_lisatud:'seade lisatud',seade_muudetud:'seade muudetud',kasutaja_kinnitatud:'kasutaja aktiveeritud',kasutaja_peatatud:'kasutaja peatatud',keeld_eemaldatud:'keeld eemaldatud',super_antud:'superkasutaja õigus antud',super_eemaldatud:'superkasutaja õigus eemaldatud',taastuskood:'taastuskood antud',parool_taastatud:'parool taastatud',marge_lahendatud:'märkus lahendatud',vaidlus_lahendatud:'vaidlus lahendatud'};
+const SYND={kasutaja_lahkunud:'töötaja lahkunud',hoia_lisatud:'säilitus: hoia',hoia_eemaldatud:'säilitus: hoia eemaldatud',broneering:'broneeris',broneering_tyhistatud:'tühistas broneeringu',taatlus_tehtud:'taatlus registreeritud',kustutatud:'kustutatud (taastatav 30 p)',taastatud:'taastatud',lopp_kustutatud:'lõplikult kustutatud',vott:'võttis',tagastus:'tagastas',ulevott:'võttis üle',tagastus_teise_eest:'märkis tagastatuks teise eest',kinnitas:'kinnitas ülevõtu',vaidlus:'vaidlustas',marge:'märkus',registreerus:'registreerus',leiuteade:'leiuteade',tagastus_halduri_poolt:'haldur tagastas',seade_lisatud:'seade lisatud',seade_muudetud:'seade muudetud',kasutaja_kinnitatud:'kasutaja aktiveeritud',kasutaja_peatatud:'kasutaja peatatud',keeld_eemaldatud:'keeld eemaldatud',super_antud:'superkasutaja õigus antud',super_eemaldatud:'superkasutaja õigus eemaldatud',taastuskood:'taastuskood antud',parool_taastatud:'parool taastatud',marge_lahendatud:'märkus lahendatud',vaidlus_lahendatud:'vaidlus lahendatud'};
 function logiTabel(l){const sn=k=>(U.seadmed.find(s=>s.kood===k)||{}).nimi||k||'';
-  return '<table><tr><th>Aeg</th><th>Sündmus</th><th>Seade</th><th>Kes</th><th>Lisa</th></tr>'+l.map(x=>'<tr><td>'+esc(aeg(x.aeg))+'</td><td>'+esc(SYND[x.tyyp]||x.tyyp)+'</td><td>'+esc(sn(x.kood||x.leidkood))+'</td><td>'+esc(x.nimi||'')+'</td><td>'+esc([x.eelmise_nimi&&('eelmine: '+x.eelmise_nimi),x.uus&&('uus: '+x.uus),x.marge,x.tekst,x.kontakt,x.linn,x.gps&&('📍 '+x.gps.lat+','+x.gps.lon)].filter(Boolean).join(' · '))+(x.foto?' <a href="#" data-foto="'+esc(x.foto)+'">📷 foto</a>':'')+'</td></tr>').join('')+'</table>';}
+  return '<table><tr><th>Aeg</th><th>Sündmus</th><th>Seade</th><th>Kes</th><th>Lisa</th><th>Säilitus</th></tr>'+l.map(x=>'<tr><td>'+esc(aeg(x.aeg))+'</td><td>'+esc(SYND[x.tyyp]||x.tyyp)+'</td><td>'+esc(sn(x.kood||x.leidkood))+'</td><td>'+esc(x.nimi||'')+'</td><td>'+esc([x.eelmise_nimi&&('eelmine: '+x.eelmise_nimi),x.uus&&('uus: '+x.uus),x.marge,x.tekst,x.kontakt,x.linn,x.gps&&('📍 '+x.gps.lat+','+x.gps.lon)].filter(Boolean).join(' · '))+(x.foto?' <a href="#" data-foto="'+esc(x.foto)+'">📷 foto</a>':'')+'</td><td>'+(x.voti?'<label class="mark" title="Puudujäägi, kahju või vaidlusega seotud: ei anonüümita ega kustutata"><input type="checkbox" data-hoia="'+esc(x.voti)+'"'+(x.hoia?' checked':'')+'><span>hoia</span></label>':'')+(x.anon?'<span class="vaike">anonüümitud</span>':'')+'</td></tr>').join('')+'</table>';}
+document.addEventListener('change',async e=>{const c=e.target.closest&&e.target.closest('[data-hoia]');if(!c)return;const j=await a('hoia',{voti:c.dataset.hoia,hoia:c.checked});if(!j.ok){alert(j.viga);c.checked=!c.checked;}});
 document.addEventListener('click',async e=>{const f=e.target.closest&&e.target.closest('[data-foto]'); if(!f) return; e.preventDefault();
   const r=await fetch('/api/admin/foto?k='+encodeURIComponent(f.dataset.foto),{headers:{'Authorization':'Bearer '+TOK}}); if(!r.ok){alert('Fotot ei leitud');return;}
   const u=URL.createObjectURL(await r.blob()); const w=window.open(u,'_blank'); if(!w){location.href=u;}});
-async function logi(){const j=await a('logi');$('#sisu').innerHTML='<h2>Logi (viimased 300)</h2><p><button id="csv">⬇ Logi CSV</button></p>'+logiTabel(j.logi||[]);$('#csv').onclick=()=>lae_alla('logi.csv');}
+async function logi(){const j=await a('logi');$('#sisu').innerHTML='<h2>Logi (viimased 300)</h2><p><button id="csv">⬇ Logi CSV</button> <button id="eks">⬇ Täielik eksport (JSON)</button></p>'+logiTabel(j.logi||[]);$('#csv').onclick=()=>lae_alla('logi.csv');$('#eks').onclick=()=>lae_alla('eksport.json','krativara-eksport.json');}
+const SAIL=[['sail_logi_kuud','Logiread: nimi anonüümseks pärast (kuud)'],['sail_max_kuud','Lahendamata vaidlus/kahju: kuni (kuud)'],['sail_foto_kuud','Fotod (kuud)'],['sail_leid_paevi','Leiuteade (päeva)'],['sail_leid_tagasi_paevi','Leiuteade pärast seadme tagastust (päeva)'],['sail_bron_paevi','Broneering pärast lõppu (päeva)'],['sail_lahkunud_kuud','Lahkunud töötaja nimi ja telefon (kuud)'],['sail_lahkunud_korras_paevi','… kui üleandmine oli korras (päeva)']];
+const OIG=[['registrikood','Registrikood'],['aadress','Aadress'],['andmekaitse_kontakt','Andmekaitse kontakt (e-post)'],['dpo','Andmekaitsespetsialist (kui on)'],['edastus_alus','Edastuse alus väljapoole EL-i (Cloudflare)'],['tingimused_kehtib','Tingimused kehtivad alates','date']];
 function seaded(){const s=U.seaded;
   $('#sisu').innerHTML='<h2>Seaded</h2><div class="kaart vorm"><div><label>Firma nimi</label><input id="e_firma" value="'+esc(s.firma)+'"></div><div><label>Kontakttelefon leidjale (valikuline)</label><input id="e_tel" value="'+esc(s.telefon||'')+'"></div>'+
   '<div><label>Seadmeid korraga ühe kasutaja nimel</label><input id="e_max" type="number" min="1" max="200" value="'+s.max_seadmeid+'"></div>'+
   '<div><label>Registreerimine (vaikimisi)</label><select id="e_reg"><option value="vaba"'+(s.registreerimine==='vaba'?' selected':'')+'>vaba</option><option value="kinnitamisega"'+(s.registreerimine==='kinnitamisega'?' selected':'')+'>administraatori kinnitusega</option></select></div>'+
   '<div><label>Hoiata, kui kasutuses üle (päeva)</label><input id="e_hp" type="number" min="0" max="365" value="'+s.hoiata_paevi+'"></div><div><label>Taatluse hoiatus (päeva enne)</label><input id="e_tp" type="number" min="0" max="365" value="'+s.taatlus_hoiatus_paevi+'"></div>'+
   '<div><label>Foto võtmisel/tagastamisel'+(U.foto_olemas?'':' (R2 side FOTOD puudub, foto on välja lülitatud)')+'</label><select id="e_foto">'+['ei','valikuline','kohustuslik'].map(v=>'<option'+(s.foto===v?' selected':'')+'>'+v+'</option>').join('')+'</select></div>'+
-  '<div><label class="mark"><input type="checkbox" id="e_tb"'+(s.taatlus_blokeerib?' checked':'')+'><span>Aegunud taatlusega seadet ei saa võtta</span></label></div></div><button class="roh" id="e_salv">Salvesta</button><div id="e_teade"></div>'+
+  '<div><label class="mark"><input type="checkbox" id="e_tb"'+(s.taatlus_blokeerib?' checked':'')+'><span>Aegunud taatlusega seadet ei saa võtta</span></label></div></div>'+
+  '<h2>Säilitusajad</h2><div class="kaart vorm">'+SAIL.map(([v,t])=>'<div><label>'+t+'</label><input type="number" id="e_'+v+'" value="'+esc(s[v])+'"></div>').join('')+'</div>'+
+  '<p class="vaike">Rakenduvad automaatselt kord päevas. Viimati: '+(U.sailitus_viimati?esc(aeg(U.sailitus_viimati.aeg))+' (anonüümiti '+U.sailitus_viimati.logi_anon+' logirida, kustutati '+U.sailitus_viimati.leid_kustutatud+' leiuteadet, '+U.sailitus_viimati.foto_kustutatud+' fotot)':'veel mitte')+'. <button id="e_sail">Käivita kohe</button></p>'+
+  '<h2>Privaatsusteave ja tingimused</h2><p class="vaike">Need andmed on lehtedel <a href="/privaatsus" target="_blank">/privaatsus</a> ja <a href="/tingimused" target="_blank">/tingimused</a>. Teavituskanal: '+esc((U.kanalid||[]).join(', ')||'puudub')+'.</p><div class="kaart vorm">'+
+  OIG.map(([v,t,tp])=>'<div><label>'+t+'</label><input id="e_'+v+'"'+(tp?' type="'+tp+'"':'')+' value="'+esc(s[v]||'')+'"></div>').join('')+'</div>'+
+  '<button class="roh" id="e_salv">Salvesta</button><div id="e_teade"></div>'+
   '<h2>📆 Kalender (Outlook / Google)</h2><div class="kaart"><p class="vaike">Taatluste tähtajad (meeldetuletus '+s.taatlus_hoiatus_paevi+' päeva ette) ja broneeringud. Outlookis: Kalender → Lisa kalender → Veebist → kleebi link. Link on salajane: kes selle saab, näeb seadmete nimesid ja broneerijaid.</p>'+
   '<input id="k_link" readonly value="'+(s.kalender_token?esc(location.origin+'/api/kalender/'+s.kalender_token+'.ics'):'')+'" placeholder="Link puudub"><button id="k_loo">'+(s.kalender_token?'Loo uus link (vana lakkab töötamast)':'Loo kalendri link')+'</button> <button id="k_kop">Kopeeri</button></div>';
   $('#k_loo').onclick=async()=>{if(s.kalender_token&&!confirm('Vana link lakkab töötamast. Jätkata?'))return;const j=await a('kalender',{uus:true});if(j.ok){U.seaded.kalender_token=j.token;seaded();}else alert(j.viga);};
   $('#k_kop').onclick=async()=>{try{await navigator.clipboard.writeText($('#k_link').value);$('#k_kop').textContent='Kopeeritud ✓';}catch(e){$('#k_link').select();}};
-  $('#e_salv').onclick=async()=>{const j=await a('seaded',{firma:$('#e_firma').value,telefon:$('#e_tel').value.trim(),max_seadmeid:+$('#e_max').value,registreerimine:$('#e_reg').value,hoiata_paevi:+$('#e_hp').value,taatlus_hoiatus_paevi:+$('#e_tp').value,taatlus_blokeerib:$('#e_tb').checked,foto:$('#e_foto').value});
+  $('#e_sail').onclick=async()=>{const j=await a('sailitus',{});if(!j.ok){alert(j.viga);return;}U=await a('ulevaade');seaded();};
+  $('#e_salv').onclick=async()=>{const lisa={};SAIL.forEach(([v])=>lisa[v]=+$('#e_'+v).value);OIG.forEach(([v])=>lisa[v]=$('#e_'+v).value.trim());
+    const j=await a('seaded',{...lisa,firma:$('#e_firma').value,telefon:$('#e_tel').value.trim(),max_seadmeid:+$('#e_max').value,registreerimine:$('#e_reg').value,hoiata_paevi:+$('#e_hp').value,taatlus_hoiatus_paevi:+$('#e_tp').value,taatlus_blokeerib:$('#e_tb').checked,foto:$('#e_foto').value});
     $('#e_teade').innerHTML=j.ok?'<div class="ok">Salvestatud</div>':'<div class="viga">'+esc(j.viga)+'</div>'; if(j.ok)U.seaded=j.seaded;};
 }
-async function lae_alla(nimi){const r=await fetch('/api/admin/'+nimi,{headers:{'Authorization':'Bearer '+TOK}});if(!r.ok){alert('Viga');return;}const b=await r.blob();const u=URL.createObjectURL(b);const l=document.createElement('a');l.href=u;l.download=nimi;document.body.appendChild(l);l.click();l.remove();setTimeout(()=>URL.revokeObjectURL(u),2000);}
+async function lae_alla(nimi,failinimi){const r=await fetch('/api/admin/'+nimi,{headers:{'Authorization':'Bearer '+TOK}});if(!r.ok){alert('Viga');return;}const b=await r.blob();const u=URL.createObjectURL(b);const l=document.createElement('a');l.href=u;l.download=failinimi||nimi;document.body.appendChild(l);l.click();l.remove();setTimeout(()=>URL.revokeObjectURL(u),2000);}
 if(TOK) lae();
 </script></body></html>`;
 }
